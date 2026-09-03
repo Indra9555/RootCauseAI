@@ -1,4 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from database.connection import get_db
+from database.models import Log
 from schemas.telemetry import LogEntry
 
 
@@ -9,9 +13,29 @@ router = APIRouter(
 
 
 @router.post("/logs")
-def ingest_log(log: LogEntry):
+def ingest_log(
+    log: LogEntry,
+    db: Session = Depends(get_db)
+):
+    db_log = Log(
+        service=log.service,
+        level=log.level,
+        message=log.message,
+        timestamp=log.timestamp
+    )
+
+    db.add(db_log)
+    db.commit()
+    db.refresh(db_log)
+
     return {
-        "status": "received",
-        "message": "Log successfully ingested",
-        "log": log
+        "status": "stored",
+        "message": "Log successfully stored",
+        "log": {
+            "id": db_log.id,
+            "service": db_log.service,
+            "level": db_log.level,
+            "message": db_log.message,
+            "timestamp": db_log.timestamp
+        }
     }

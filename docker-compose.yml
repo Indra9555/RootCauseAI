@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: rootcauseai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: rootcauseai
+      POSTGRES_USER: rootcause
+      POSTGRES_PASSWORD: rootcause_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

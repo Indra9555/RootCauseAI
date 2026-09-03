@@ -1,5 +1,8 @@
 from fastapi import FastAPI
 
+from database.connection import Base, engine
+from database import models
+
 from api.routes.telemetry import router as telemetry_router
 
 
@@ -10,11 +13,14 @@ app = FastAPI(
 )
 
 
+# Create database tables
+Base.metadata.create_all(bind=engine)
+
+
 @app.get("/")
 def root():
     return {
-        "message": "RootCauseAI backend is running",
-        "status": "online"
+        "message": "RootCauseAI Backend is running"
     }
 
 

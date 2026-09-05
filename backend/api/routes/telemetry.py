@@ -3,8 +3,7 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from database.models import Log
-from schemas.telemetry import LogEntry
-
+from schemas.telemetry import LogEntry, LogResponse
 
 router = APIRouter(
     prefix="/api/telemetry",
@@ -39,3 +38,10 @@ def ingest_log(
             "timestamp": db_log.timestamp
         }
     }
+@router.get("/logs", response_model=list[LogResponse])
+def get_logs(
+    db: Session = Depends(get_db)
+):
+    logs = db.query(Log).order_by(Log.timestamp.desc()).all()
+
+    return logs

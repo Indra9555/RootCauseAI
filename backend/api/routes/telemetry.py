@@ -5,7 +5,7 @@ from database.connection import get_db
 from database.models import Log
 from schemas.telemetry import LogEntry
 from analysis.log_classifier import classify_log_level
-
+from analysis.log_analysis_service import analyze_logs
 
 router = APIRouter(
     prefix="/api/telemetry",
@@ -46,3 +46,8 @@ def ingest_log(
             "timestamp": db_log.timestamp
         }
     }
+@router.get("/analysis")
+def get_log_analysis(
+    db: Session = Depends(get_db)
+):
+    return analyze_logs(db)

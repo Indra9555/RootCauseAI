@@ -2,16 +2,26 @@ from sqlalchemy.orm import Session
 
 from database.models import Log
 from analysis.pattern_detector import detect_error_patterns
+from analysis.candidate_detector import rank_candidates
 
 
 def analyze_logs(db: Session):
     """
-    Fetch logs from PostgreSQL and analyze their failure patterns.
+    Fetch logs from PostgreSQL and perform failure analysis.
     """
 
     logs = db.query(Log).order_by(Log.timestamp.asc()).all()
 
-    return detect_error_patterns(logs)
+    patterns = detect_error_patterns(logs)
+
+    candidates = rank_candidates(patterns)
+
+    return {
+        "patterns": patterns,
+        "candidates": candidates
+    }
+
+
 if __name__ == "__main__":
     from database.connection import SessionLocal
 

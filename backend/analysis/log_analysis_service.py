@@ -4,6 +4,7 @@ from database.models import Log
 from analysis.pattern_detector import detect_error_patterns
 from analysis.temporal_detector import detect_first_failures
 from analysis.temporal_detector import rank_by_first_failure
+from analysis.message_correlator import correlate_messages
 from analysis.candidate_detector import rank_candidates
 
 
@@ -22,18 +23,23 @@ def analyze_logs(db: Session):
     # 3. Detect the first failure of each service
     first_failures = detect_first_failures(logs)
 
-    # 4. Rank services based on when they first failed
+    # 4. Rank services based on first failure
     temporal_ranking = rank_by_first_failure(first_failures)
 
-    # 5. Combine severity and temporal evidence
+    # 5. Find common technical patterns in messages
+    correlations = correlate_messages(logs)
+
+    # 6. Combine all evidence
     candidates = rank_candidates(
         patterns,
-        first_failures
+        first_failures,
+        correlations
     )
 
     return {
         "patterns": patterns,
         "temporal_analysis": temporal_ranking,
+        "correlations": correlations,
         "candidates": candidates
     }
 

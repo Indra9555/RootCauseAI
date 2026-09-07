@@ -16,9 +16,7 @@ def calculate_temporal_scores(first_failures):
     """
     Give higher scores to services that failed earlier.
 
-    1st  = 3 points
-    2nd  = 2 points
-    3rd  = 1 point
+    Earliest failure gets the highest score.
     """
 
     ranked = sorted(
@@ -32,35 +30,95 @@ def calculate_temporal_scores(first_failures):
 
     for index, (service, _) in enumerate(ranked):
         score = total_services - index
-
         temporal_scores[service] = score
 
     return temporal_scores
 
 
-def rank_candidates(patterns, first_failures):
+def calculate_correlation_scores(correlations):
     """
-    Combine failure severity and temporal evidence
+    Calculate correlation scores based on how many
+    services share the same technical error pattern.
+
+    A pattern affecting multiple services provides
+    stronger root-cause evidence.
+
+    Example:
+
+    database → 2 services → 2 points
+    connection → 3 services → 3 points
+    timeout → 2 services → 2 points
+    """
+
+    correlation_scores = {}
+
+    for _, data in correlations.items():
+
+        services = data["services"]
+
+        service_count = len(services)
+
+        if service_count < 2:
+            continue
+
+        for service in services:
+
+            correlation_scores[service] = (
+                correlation_scores.get(service, 0)
+                + service_count
+            )
+
+    return correlation_scores
+
+
+def rank_candidates(
+    patterns,
+    first_failures,
+    correlations
+):
+    """
+    Combine failure, temporal, and correlation evidence
     to rank root-cause candidates.
     """
 
-    temporal_scores = calculate_temporal_scores(first_failures)
+    temporal_scores = calculate_temporal_scores(
+        first_failures
+    )
+
+    correlation_scores = calculate_correlation_scores(
+        correlations
+    )
 
     candidates = []
 
     for service, stats in patterns.items():
 
-        failure_score = calculate_candidate_score(stats)
+        failure_score = calculate_candidate_score(
+            stats
+        )
 
-        temporal_score = temporal_scores.get(service, 0)
+        temporal_score = temporal_scores.get(
+            service,
+            0
+        )
 
-        combined_score = failure_score + temporal_score
+        correlation_score = correlation_scores.get(
+            service,
+            0
+        )
+
+        combined_score = (
+            failure_score
+            + temporal_score
+            + correlation_score
+        )
 
         candidates.append({
             "service": service,
             "score": combined_score,
             "failure_score": failure_score,
             "temporal_score": temporal_score,
+            "correlation_score": correlation_score,
             "error_count": stats["error_count"],
             "critical_count": stats["critical_count"],
             "total_failures": stats["total_failures"]
@@ -95,19 +153,48 @@ if __name__ == "__main__":
 
     test_first_failures = {
         "database": datetime(
-            2026, 9, 4, 10, 0, 1, tzinfo=timezone.utc
+            2026, 9, 4, 10, 0, 1,
+            tzinfo=timezone.utc
         ),
         "payment-service": datetime(
-            2026, 9, 4, 10, 0, 4, tzinfo=timezone.utc
+            2026, 9, 4, 10, 0, 4,
+            tzinfo=timezone.utc
         ),
         "user-service": datetime(
-            2026, 9, 4, 10, 0, 7, tzinfo=timezone.utc
+            2026, 9, 4, 10, 0, 7,
+            tzinfo=timezone.utc
         )
+    }
+
+    test_correlations = {
+        "database": {
+            "count": 2,
+            "services": [
+                "user-service",
+                "payment-service"
+            ]
+        },
+        "connection": {
+            "count": 3,
+            "services": [
+                "user-service",
+                "payment-service",
+                "database"
+            ]
+        },
+        "timeout": {
+            "count": 2,
+            "services": [
+                "user-service",
+                "payment-service"
+            ]
+        }
     }
 
     result = rank_candidates(
         test_patterns,
-        test_first_failures
+        test_first_failures,
+        test_correlations
     )
 
     for candidate in result:

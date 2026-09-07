@@ -1,3 +1,6 @@
+from analysis.dependency_graph import calculate_dependency_scores
+
+
 def calculate_candidate_score(stats):
     """
     Calculate the failure/severity score.
@@ -42,12 +45,6 @@ def calculate_correlation_scores(correlations):
 
     A pattern affecting multiple services provides
     stronger root-cause evidence.
-
-    Example:
-
-    database → 2 services → 2 points
-    connection → 3 services → 3 points
-    timeout → 2 services → 2 points
     """
 
     correlation_scores = {}
@@ -74,11 +71,12 @@ def calculate_correlation_scores(correlations):
 def rank_candidates(
     patterns,
     first_failures,
-    correlations
+    correlations,
+    dependency_scores
 ):
     """
-    Combine failure, temporal, and correlation evidence
-    to rank root-cause candidates.
+    Combine failure, temporal, correlation, and
+    dependency evidence to rank root-cause candidates.
     """
 
     temporal_scores = calculate_temporal_scores(
@@ -107,10 +105,16 @@ def rank_candidates(
             0
         )
 
+        dependency_score = dependency_scores.get(
+            service,
+            0
+        )
+
         combined_score = (
             failure_score
             + temporal_score
             + correlation_score
+            + dependency_score
         )
 
         candidates.append({
@@ -119,6 +123,7 @@ def rank_candidates(
             "failure_score": failure_score,
             "temporal_score": temporal_score,
             "correlation_score": correlation_score,
+            "dependency_score": dependency_score,
             "error_count": stats["error_count"],
             "critical_count": stats["critical_count"],
             "total_failures": stats["total_failures"]
@@ -130,7 +135,10 @@ def rank_candidates(
     )
 
     return candidates
+
+
 if __name__ == "__main__":
+
     from datetime import datetime, timezone
 
     test_patterns = {
@@ -191,10 +199,21 @@ if __name__ == "__main__":
         }
     }
 
+    # Dependency evidence:
+    # database is depended on by both failing services.
+    test_dependency_scores = calculate_dependency_scores(
+        [
+            "database",
+            "payment-service",
+            "user-service"
+        ]
+    )
+
     result = rank_candidates(
         test_patterns,
         test_first_failures,
-        test_correlations
+        test_correlations,
+        test_dependency_scores
     )
 
     for candidate in result:

@@ -1,56 +1,157 @@
 from sqlalchemy.orm import Session
 
 from database.models import Log
+from database.connection import SessionLocal
+
 from analysis.pattern_detector import detect_error_patterns
-from analysis.temporal_detector import detect_first_failures
-from analysis.temporal_detector import rank_by_first_failure
-from analysis.message_correlator import correlate_messages
 from analysis.candidate_detector import rank_candidates
+from analysis.message_correlator import correlate_messages
+from analysis.dependency_graph import (
+    calculate_dependency_scores,
+    get_dependencies
+)
 
 
-def analyze_logs(db: Session):
+def get_logs(db: Session):
     """
-    Fetch logs from PostgreSQL and perform complete
-    root-cause analysis.
+    Fetch all logs ordered by timestamp.
     """
 
-    # 1. Fetch all logs in chronological order
-    logs = db.query(Log).order_by(Log.timestamp.asc()).all()
+    return (
+        db.query(Log)
+        .order_by(Log.timestamp.asc())
+        .all()
+    )
 
-    # 2. Detect failure patterns
+
+def analyze_logs(logs):
+    """
+    Run the complete RootCauseAI analysis pipeline.
+    """
+
+    # --------------------------------
+    # 1. Pattern analysis
+    # --------------------------------
+
     patterns = detect_error_patterns(logs)
 
-    # 3. Detect the first failure of each service
-    first_failures = detect_first_failures(logs)
+    # --------------------------------
+    # 2. Temporal analysis
+    # --------------------------------
 
-    # 4. Rank services based on first failure
-    temporal_ranking = rank_by_first_failure(first_failures)
+    first_failures = {}
 
-    # 5. Find common technical patterns in messages
+    for log in logs:
+
+        level = log.level.upper().strip()
+
+        if level not in ("ERROR", "CRITICAL"):
+            continue
+
+        if log.service not in first_failures:
+            first_failures[log.service] = log.timestamp
+
+    temporal_analysis = []
+
+    for service, timestamp in first_failures.items():
+
+        temporal_analysis.append({
+            "service": service,
+            "first_failure": timestamp
+        })
+
+    # --------------------------------
+    # 3. Message correlation
+    # --------------------------------
+
     correlations = correlate_messages(logs)
 
-    # 6. Combine all evidence
+    # --------------------------------
+    # 4. Find dependency services
+    # --------------------------------
+
+    failing_services = set(patterns.keys())
+
+    dependency_services = set()
+
+    for service in failing_services:
+
+        dependencies = get_dependencies(service)
+
+        for dependency in dependencies:
+            dependency_services.add(dependency)
+
+    # Add dependency services to the candidate set
+    all_candidate_services = (
+        failing_services
+        | dependency_services
+    )
+
+    # --------------------------------
+    # 5. Dependency scoring
+    # --------------------------------
+
+    dependency_scores = calculate_dependency_scores(
+        list(all_candidate_services)
+    )
+
+    # --------------------------------
+    # 6. Add missing dependency services
+    # --------------------------------
+
+    for service in dependency_services:
+
+        if service not in patterns:
+
+            patterns[service] = {
+                "error_count": 0,
+                "critical_count": 0,
+                "total_failures": 0
+            }
+
+    # --------------------------------
+    # 7. Candidate ranking
+    # --------------------------------
+
     candidates = rank_candidates(
         patterns,
         first_failures,
-        correlations
+        correlations,
+        dependency_scores
     )
+
+    # --------------------------------
+    # 8. Return complete analysis
+    # --------------------------------
 
     return {
         "patterns": patterns,
-        "temporal_analysis": temporal_ranking,
+        "temporal_analysis": temporal_analysis,
         "correlations": correlations,
         "candidates": candidates
     }
 
 
-if __name__ == "__main__":
-    from database.connection import SessionLocal
+def run_analysis():
+    """
+    Run analysis against the real PostgreSQL logs.
+    """
 
     db = SessionLocal()
 
     try:
-        result = analyze_logs(db)
-        print(result)
+
+        logs = get_logs(db)
+
+        return analyze_logs(logs)
+
     finally:
+
         db.close()
+
+
+if __name__ == "__main__":
+
+    result = run_analysis()
+
+    print(result)

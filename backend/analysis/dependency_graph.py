@@ -1,6 +1,6 @@
 DEPENDENCIES = {
-    "user-service": ["database"],
-    "payment-service": ["database"]
+    "user-service": ["postgres"],
+    "payment-service": ["postgres"]
 }
 
 
@@ -46,22 +46,14 @@ def build_dependency_evidence(services):
         })
 
     return evidence
+
+
 def calculate_dependency_scores(failing_services):
     """
-    Calculate dependency scores for services.
+    Calculate dependency scores.
 
     A service receives points when other failing services
     depend on it.
-
-    Example:
-
-        database
-        /      \
-       ↓        ↓
-    user     payment
-
-    If both user and payment are failing,
-    database receives 2 dependency points.
     """
 
     dependency_scores = {}
@@ -82,19 +74,21 @@ def calculate_dependency_scores(failing_services):
 
     return dependency_scores
 
+
 if __name__ == "__main__":
 
-    failing_services = [
-        "database",
+    services = [
+        "postgres",
         "user-service",
         "payment-service"
     ]
 
-    scores = calculate_dependency_scores(
-        failing_services
+    dependency_scores = calculate_dependency_scores(
+        services
     )
 
-    for service, score in scores.items():
+    for service, score in dependency_scores.items():
+
         print({
             "service": service,
             "dependency_score": score

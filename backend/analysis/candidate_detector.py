@@ -142,7 +142,7 @@ if __name__ == "__main__":
     from datetime import datetime, timezone
 
     test_patterns = {
-        "database": {
+    "postgres": {
             "error_count": 3,
             "critical_count": 2,
             "total_failures": 5
@@ -160,7 +160,7 @@ if __name__ == "__main__":
     }
 
     test_first_failures = {
-        "database": datetime(
+    "database": datetime(
             2026, 9, 4, 10, 0, 1,
             tzinfo=timezone.utc
         ),
@@ -202,12 +202,12 @@ if __name__ == "__main__":
     # Dependency evidence:
     # database is depended on by both failing services.
     test_dependency_scores = calculate_dependency_scores(
-        [
-            "database",
-            "payment-service",
-            "user-service"
-        ]
-    )
+    [
+        "postgres",
+        "payment-service",
+        "user-service"
+    ]
+)
 
     result = rank_candidates(
         test_patterns,

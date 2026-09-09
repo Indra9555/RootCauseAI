@@ -4,6 +4,7 @@ from database.connection import Base, engine
 from database import models
 
 from api.routes.telemetry import router as telemetry_router
+#from api.routes.analysis import router as analysis_router
 
 
 app = FastAPI(
@@ -33,3 +34,4 @@ def health_check():
 
 
 app.include_router(telemetry_router)
+#app.include_router(analysis_router)

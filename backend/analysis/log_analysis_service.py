@@ -6,6 +6,9 @@ from database.connection import SessionLocal
 from analysis.pattern_detector import detect_error_patterns
 from analysis.candidate_detector import rank_candidates
 from analysis.message_correlator import correlate_messages
+from analysis.root_cause_explainer import (
+    generate_root_cause_explanation
+)
 from analysis.dependency_graph import (
     calculate_dependency_scores,
     get_dependencies
@@ -49,6 +52,7 @@ def analyze_logs(logs):
             continue
 
         if log.service not in first_failures:
+
             first_failures[log.service] = log.timestamp
 
     temporal_analysis = []
@@ -79,16 +83,20 @@ def analyze_logs(logs):
         dependencies = get_dependencies(service)
 
         for dependency in dependencies:
+
             dependency_services.add(dependency)
 
-    # Add dependency services to the candidate set
+    # --------------------------------
+    # 5. Build complete candidate set
+    # --------------------------------
+
     all_candidate_services = (
         failing_services
         | dependency_services
     )
 
     # --------------------------------
-    # 5. Dependency scoring
+    # 6. Dependency scoring
     # --------------------------------
 
     dependency_scores = calculate_dependency_scores(
@@ -96,7 +104,7 @@ def analyze_logs(logs):
     )
 
     # --------------------------------
-    # 6. Add missing dependency services
+    # 7. Add dependency-only services
     # --------------------------------
 
     for service in dependency_services:
@@ -110,7 +118,7 @@ def analyze_logs(logs):
             }
 
     # --------------------------------
-    # 7. Candidate ranking
+    # 8. Candidate ranking
     # --------------------------------
 
     candidates = rank_candidates(
@@ -121,14 +129,26 @@ def analyze_logs(logs):
     )
 
     # --------------------------------
-    # 8. Return complete analysis
+    # 9. Root-cause explanation
+    # --------------------------------
+
+    root_cause_explanation = (
+        generate_root_cause_explanation(
+            candidates,
+            correlations
+        )
+    )
+
+    # --------------------------------
+    # 10. Complete analysis result
     # --------------------------------
 
     return {
         "patterns": patterns,
         "temporal_analysis": temporal_analysis,
         "correlations": correlations,
-        "candidates": candidates
+        "candidates": candidates,
+        "root_cause_explanation": root_cause_explanation
     }
 
 

@@ -626,6 +626,86 @@ function App() {
           )}
 
         </section>
+        {/* Incident Timeline */}
+<section className="analysis-card timeline-card">
+
+  <div className="card-label">
+    INCIDENT TIMELINE
+  </div>
+
+  <p className="small-label">
+    Failure sequence
+  </p>
+
+  <div className="timeline">
+
+    {(analysis.temporal_analysis || []).map(
+      (event, index) => {
+
+        const serviceData =
+          patterns[event.service] || {};
+
+        return (
+          <div className="timeline-item" key={event.service}>
+
+            <div className="timeline-marker">
+              {index + 1}
+            </div>
+
+            <div className="timeline-content">
+
+              <div className="timeline-time">
+                {new Date(
+                  event.first_failure
+                ).toLocaleString()}
+              </div>
+
+              <strong>
+                {event.service}
+              </strong>
+
+              <p>
+                {serviceData.total_failures || 0} failure
+                {serviceData.total_failures === 1
+                  ? ""
+                  : "s"} detected
+              </p>
+
+            </div>
+
+          </div>
+        );
+      }
+    )}
+
+    <div className="timeline-item root-timeline">
+
+      <div className="timeline-marker root-marker">
+        ◆
+      </div>
+
+      <div className="timeline-content">
+
+        <div className="timeline-time">
+          ROOT CAUSE
+        </div>
+
+        <strong>
+          {rootCause.root_cause}
+        </strong>
+
+        <p>
+          Upstream dependency identified by
+          dependency analysis
+        </p>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</section>
 
 
         {/* ================================

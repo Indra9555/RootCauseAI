@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from database.connection import SessionLocal
 from database.models import Incident, IncidentEvent
 
+from analysis.log_analysis_service import analyze_incident
+
 
 router = APIRouter(
     prefix="/api/incidents",
@@ -20,15 +22,10 @@ def get_db():
         db.close()
 
 
-# =========================================================
-# GET ALL INCIDENTS
-# =========================================================
-
 @router.get("")
 def get_incidents(
     db: Session = Depends(get_db)
 ):
-
     incidents = (
         db.query(Incident)
         .order_by(
@@ -59,16 +56,38 @@ def get_incidents(
     ]
 
 
-# =========================================================
-# GET SINGLE INCIDENT
-# =========================================================
+# --------------------------------
+# Incident-specific RCA analysis
+# --------------------------------
+
+@router.get("/{incident_id}/analysis")
+def get_incident_analysis(
+    incident_id: str,
+    db: Session = Depends(get_db)
+):
+    analysis = analyze_incident(
+        db,
+        incident_id
+    )
+
+    if analysis is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found"
+        )
+
+    return analysis
+
+
+# --------------------------------
+# Incident details
+# --------------------------------
 
 @router.get("/{incident_id}")
 def get_incident(
     incident_id: str,
     db: Session = Depends(get_db)
 ):
-
     incident = (
         db.query(Incident)
         .filter(
@@ -102,20 +121,15 @@ def get_incident(
     }
 
 
-# =========================================================
-# GET INCIDENT TIMELINE / EVENTS
-# =========================================================
+# --------------------------------
+# Incident timeline
+# --------------------------------
 
 @router.get("/{incident_id}/events")
 def get_incident_events(
     incident_id: str,
     db: Session = Depends(get_db)
 ):
-
-    # -----------------------------------------------
-    # CHECK INCIDENT EXISTS
-    # -----------------------------------------------
-
     incident = (
         db.query(Incident)
         .filter(
@@ -130,10 +144,6 @@ def get_incident_events(
             detail="Incident not found"
         )
 
-    # -----------------------------------------------
-    # GET EVENTS
-    # -----------------------------------------------
-
     events = (
         db.query(IncidentEvent)
         .filter(
@@ -146,14 +156,10 @@ def get_incident_events(
         .all()
     )
 
-    # -----------------------------------------------
-    # RESPONSE
-    # -----------------------------------------------
-
     return [
         {
             "id": event.id,
-            "incident_id": event.incident_id,
+            "incident_id": incident_id,
             "event_type": event.event_type,
             "service": event.service,
             "message": event.message,

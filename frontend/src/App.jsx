@@ -1,26 +1,38 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import "./App.css";
 
+const API_URL = "http://127.0.0.1:8000";
+
 function App() {
   const [analysis, setAnalysis] = useState(null);
+  const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [activePage, setActivePage] = useState("Dashboard");
+
+  const [logSearch, setLogSearch] = useState("");
+  const [serviceFilter, setServiceFilter] = useState("All");
+  const [levelFilter, setLevelFilter] = useState("All");
+
+  const [incidentSelected, setIncidentSelected] = useState(false);
 
   useEffect(() => {
     fetchAnalysis();
+    fetchLogs();
   }, []);
 
   const fetchAnalysis = async () => {
     try {
       setLoading(true);
+      setError("");
 
       const response = await axios.get(
-        "http://127.0.0.1:8000/api/telemetry/analysis"
+        `${API_URL}/api/telemetry/analysis`
       );
 
       setAnalysis(response.data);
-      setError(null);
     } catch (err) {
       console.error(err);
       setError("Unable to connect to RootCauseAI backend.");
@@ -29,722 +41,1462 @@ function App() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="loading-screen">
-        <div className="loader"></div>
-        <h2>Analyzing system...</h2>
-      </div>
-    );
-  }
+  const fetchLogs = async () => {
+    try {
+      setLogsLoading(true);
 
-  if (error) {
-    return (
-      <div className="error-screen">
-        <h2>RootCauseAI</h2>
-        <p>{error}</p>
-        <button onClick={fetchAnalysis}>
-          Retry Connection
+      const response = await axios.get(
+        `${API_URL}/api/telemetry/logs`
+      );
+
+      setLogs(response.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  const refreshDashboard = async () => {
+    await fetchAnalysis();
+    await fetchLogs();
+  };
+
+  const handleNavigation = (page) => {
+    setActivePage(page);
+
+    if (page !== "Incidents") {
+      setIncidentSelected(false);
+    }
+  };
+
+  // =========================================================
+  // DERIVED DATA
+  // =========================================================
+
+const patterns = analysis?.patterns || {};
+
+const rawRootCause = analysis?.root_cause;
+
+const rootCause =
+  typeof rawRootCause === "string"
+    ? {
+        root_cause: rawRootCause,
+        confidence: analysis?.confidence || "Unknown",
+        reason:
+          analysis?.reason ||
+          "No root-cause explanation is currently available.",
+        evidence: analysis?.evidence || [],
+        recommendations:
+          analysis?.recommendations || [],
+      }
+    : rawRootCause || {};
+
+const correlations = analysis?.correlations || {};
+const candidates = analysis?.candidates || [];
+const temporalAnalysis =
+  analysis?.temporal_analysis || [];
+
+  const services = Object.keys(patterns);
+
+const totalFailures = Object.values(patterns).reduce(
+  (total, service) => {
+    if (typeof service === "number") {
+      return total + service;
+    }
+
+    return total + (service?.total_failures || 0);
+  },
+  0
+);
+
+const criticalEvents = Object.values(patterns).reduce(
+  (total, service) => {
+    if (typeof service === "number") {
+      return total;
+    }
+
+    return total + (service?.critical_count || 0);
+  },
+  0
+);
+
+ const failingServices = services.filter(
+  (service) =>
+    typeof patterns[service] === "number"
+      ? patterns[service] > 0
+      : (patterns[service]?.total_failures || 0) > 0
+);
+  const uniqueServices = useMemo(() => {
+    return [...new Set(logs.map((log) => log.service))];
+  }, [logs]);
+
+  const uniqueLevels = useMemo(() => {
+    return [...new Set(logs.map((log) => log.level))];
+  }, [logs]);
+
+  const filteredLogs = useMemo(() => {
+    return logs.filter((log) => {
+      const search = logSearch.toLowerCase();
+
+      const matchesSearch =
+        !search ||
+        log.message?.toLowerCase().includes(search) ||
+        log.service?.toLowerCase().includes(search) ||
+        log.level?.toLowerCase().includes(search);
+
+      const matchesService =
+        serviceFilter === "All" ||
+        log.service === serviceFilter;
+
+      const matchesLevel =
+        levelFilter === "All" ||
+        log.level === levelFilter;
+
+      return (
+        matchesSearch &&
+        matchesService &&
+        matchesLevel
+      );
+    });
+  }, [
+    logs,
+    logSearch,
+    serviceFilter,
+    levelFilter
+  ]);
+
+  const getLevelClass = (level) => {
+    const normalized = String(level || "").toLowerCase();
+
+    if (normalized === "critical") {
+      return "level-critical";
+    }
+
+    if (normalized === "error") {
+      return "level-error";
+    }
+
+    if (
+      normalized === "warning" ||
+      normalized === "warn"
+    ) {
+      return "level-warning";
+    }
+
+    return "level-info";
+  };
+
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return "Unknown";
+
+    const date = new Date(timestamp);
+
+    if (Number.isNaN(date.getTime())) {
+      return timestamp;
+    }
+
+    return date.toLocaleString();
+  };
+
+  // =========================================================
+  // DASHBOARD
+  // =========================================================
+
+  const renderDashboard = () => (
+    <>
+      <div className="topbar">
+        <div>
+          <span className="eyebrow">
+            SYSTEM OVERVIEW
+          </span>
+
+          <h1>Root Cause Dashboard</h1>
+
+          <p>
+            Real-time software failure intelligence
+          </p>
+        </div>
+
+        <button
+          className="refresh-button"
+          onClick={refreshDashboard}
+          disabled={loading}
+        >
+          ↻ Refresh Analysis
         </button>
       </div>
-    );
-  }
 
-  const patterns = analysis.patterns || {};
-  const correlations = analysis.correlations || {};
-  const candidates = analysis.candidates || {};
-  const rootCause = analysis.root_cause_explanation || {};
-
-  const services = Object.entries(patterns);
-
-  const totalFailures = services.reduce(
-    (total, [, service]) =>
-      total + (service.total_failures || 0),
-    0
-  );
-
-  const criticalEvents = services.reduce(
-    (total, [, service]) =>
-      total + (service.critical_count || 0),
-    0
-  );
-
-  /*
-   * Find services affected by the root cause.
-   *
-   * These are candidates other than the root cause
-   * that currently have failures.
-   */
-  const affectedServices = Array.isArray(candidates)
-    ? candidates.filter(
-        (candidate) =>
-          candidate.service !== rootCause.root_cause &&
-          candidate.total_failures > 0
-      )
-    : [];
-
-  return (
-    <div className="app">
-
-      {/* ================================
-          SIDEBAR
-      ================================= */}
-
-      <aside className="sidebar">
-
-        <div className="logo">
-
-          <div className="logo-icon">
-            R
-          </div>
-
-          <div>
-            <h2>
-              RootCause<span>AI</span>
-            </h2>
-
-            <p>
-              System Intelligence
-            </p>
-          </div>
-
+      <section className="stats-grid">
+        <div className="stat-card">
+          <span>Services</span>
+          <strong>{services.length}</strong>
+          <small>Monitored services</small>
         </div>
 
-        <nav>
-
-          <a className="active">
-            Dashboard
-          </a>
-
-          <a>
-            Services
-          </a>
-
-          <a>
-            Incidents
-          </a>
-
-          <a>
-            Logs
-          </a>
-
-          <a>
-            Analysis
-          </a>
-
-        </nav>
-
-        <div className="sidebar-bottom">
-
-          <div className="status-dot"></div>
-
-          <div>
-
-            <strong>
-              Backend Connected
-            </strong>
-
-            <small>
-              Live analysis enabled
-            </small>
-
-          </div>
-
+        <div className="stat-card">
+          <span>Total Failures</span>
+          <strong>{totalFailures}</strong>
+          <small>Detected failures</small>
         </div>
 
-      </aside>
-
-
-      {/* ================================
-          MAIN CONTENT
-      ================================= */}
-
-      <main className="main-content">
-
-
-        {/* ================================
-            HEADER
-        ================================= */}
-
-        <header className="topbar">
-
-          <div>
-
-            <p className="eyebrow">
-              SYSTEM OVERVIEW
-            </p>
-
-            <h1>
-              Root Cause Dashboard
-            </h1>
-
-            <p className="subtitle">
-              Real-time software failure intelligence
-            </p>
-
-          </div>
-
-
-          <button
-            className="refresh-btn"
-            onClick={fetchAnalysis}
-          >
-            ↻ Refresh Analysis
-          </button>
-
-        </header>
-
-
-        {/* ================================
-            STATS
-        ================================= */}
-
-        <section className="stats-grid">
-
-
-          {/* Services */}
-
-          <div className="stat-card">
-
-            <div className="stat-header">
-
-              <span>
-                Services
-              </span>
-
-              <div className="stat-icon">
-                ◉
-              </div>
-
-            </div>
-
-            <strong>
-              {services.length}
-            </strong>
-
-            <p>
-              Monitored services
-            </p>
-
-          </div>
-
-
-          {/* Failures */}
-
-          <div className="stat-card">
-
-            <div className="stat-header">
-
-              <span>
-                Total Failures
-              </span>
-
-              <div className="stat-icon">
-                ⚠
-              </div>
-
-            </div>
-
-            <strong>
-              {totalFailures}
-            </strong>
-
-            <p>
-              Detected events
-            </p>
-
-          </div>
-
-
-          {/* Critical */}
-
-          <div className="stat-card">
-
-            <div className="stat-header">
-
-              <span>
-                Critical Events
-              </span>
-
-              <div className="stat-icon">
-                !
-              </div>
-
-            </div>
-
-            <strong>
-              {criticalEvents}
-            </strong>
-
-            <p>
-
-              {criticalEvents === 0
-                ? "No critical events"
-                : "Critical events detected"}
-
-            </p>
-
-          </div>
-
-
-          {/* Root Cause */}
-
-          <div className="stat-card root-stat">
-
-            <div className="stat-header">
-
-              <span>
-                Root Cause
-              </span>
-
-              <div className="stat-icon">
-                ⌁
-              </div>
-
-            </div>
-
-            <strong>
-              {rootCause.root_cause || "Unknown"}
-            </strong>
-
-            <p>
-              {rootCause.confidence || "Unknown"} confidence
-            </p>
-
-          </div>
-
-        </section>
-
-
-        {/* ================================
-            SERVICE HEALTH
-        ================================= */}
-
-        <section className="section">
-
-          <div className="section-heading">
-
+        <div className="stat-card">
+          <span>Critical Events</span>
+          <strong>{criticalEvents}</strong>
+          <small>Critical severity</small>
+        </div>
+
+        <div className="stat-card root-stat">
+          <span>Root Cause</span>
+          <strong>
+            {rootCause.root_cause || "Unknown"}
+          </strong>
+
+          <small>
+            {rootCause.confidence || "Unknown"} confidence
+          </small>
+        </div>
+      </section>
+
+      <div className="dashboard-grid">
+        <section className="panel">
+          <div className="panel-header">
             <div>
-
-              <p className="eyebrow">
+              <span className="eyebrow">
                 SERVICE HEALTH
-              </p>
+              </span>
 
-              <h2>
-                Monitored Services
-              </h2>
-
+              <h2>Monitored Services</h2>
             </div>
 
-            <span className="service-count">
+            <span className="panel-count">
               {services.length} services
             </span>
-
           </div>
-
 
           <div className="services-grid">
+            {services.map((service) => {
+              const serviceData = patterns[service];
+              const failures =
+                serviceData?.total_failures || 0;
 
-            {services.map(
-              ([service, data]) => (
+              const isRoot =
+                service === rootCause.root_cause;
 
+              return (
                 <div
-                  className="service-card"
+                  className={`service-card ${
+                    isRoot ? "service-root" : ""
+                  }`}
                   key={service}
                 >
-
                   <div className="service-top">
+                    <div className="service-icon">
+                      {service
+                        .charAt(0)
+                        .toUpperCase()}
+                    </div>
 
-                    <div className="service-status"></div>
+                    <div>
+                      <strong>{service}</strong>
 
-                    <span className="service-name">
-                      {service}
+                      <span>
+                        {failures > 0
+                          ? `${failures} failures detected`
+                          : "Upstream dependency"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="service-status">
+                    <span
+                      className={
+                        failures > 0
+                          ? "status-danger"
+                          : "status-warning"
+                      }
+                    >
+                      {failures > 0
+                        ? "Attention"
+                        : "Dependency"}
                     </span>
-
                   </div>
-
-
-                  <div className="service-number">
-                    {data.total_failures}
-                  </div>
-
-
-                  <p>
-
-                    {data.total_failures > 0
-                      ? `${data.total_failures} failure${
-                          data.total_failures !== 1
-                            ? "s"
-                            : ""
-                        } detected`
-                      : "Upstream dependency"}
-
-                  </p>
-
                 </div>
-
-              )
-            )}
-
+              );
+            })}
           </div>
-
         </section>
 
+        <section className="panel root-cause-card">
+          <span className="eyebrow">
+            ROOT CAUSE ANALYSIS
+          </span>
 
-        {/* ================================
-            ROOT CAUSE + CORRELATION
-        ================================= */}
+          <h2>Most likely root cause</h2>
 
-        <section className="analysis-grid">
+          <div className="root-cause-name">
+            {rootCause.root_cause || "Unknown"}
+          </div>
 
+          <div className="confidence-badge">
+            Confidence:{" "}
+            {rootCause.confidence || "Unknown"}
+          </div>
 
-          {/* ================================
-              ROOT CAUSE ANALYSIS
-          ================================= */}
+          <p className="root-cause-reason">
+            {rootCause.reason ||
+              "No root-cause explanation is currently available."}
+          </p>
 
-          <div className="analysis-card root-cause-card">
-
-            <div className="card-label">
-
-              <span className="warning-symbol">
-                !
-              </span>
-
-              ROOT CAUSE ANALYSIS
-
-            </div>
-
-
-            <p className="small-label">
-              Most likely root cause
-            </p>
-
-
-            <h2>
-              {rootCause.root_cause || "Unknown"}
-            </h2>
-
-
-            <div className="confidence">
-
-              Confidence
-
-              <span>
-                {rootCause.confidence?.toUpperCase() ||
-                  "UNKNOWN"}
-              </span>
-
-            </div>
-
-
-            <p className="reason">
-              {rootCause.reason}
-            </p>
-
-
-            {/* Evidence */}
-
+          {rootCause.evidence?.length > 0 && (
             <div className="evidence">
+              <strong>Evidence</strong>
 
-              <h4>
-                Evidence
-              </h4>
-
-
-              {(rootCause.evidence || []).map(
+              {rootCause.evidence.map(
                 (item, index) => (
-
                   <div
                     className="evidence-item"
                     key={index}
                   >
-
-                    <span>
-                      ✓
-                    </span>
-
+                    <span>✓</span>
                     {item}
-
                   </div>
-
                 )
               )}
-
             </div>
-
-          </div>
-
-
-          {/* ================================
-              ERROR CORRELATION
-          ================================= */}
-
-          <div className="analysis-card">
-
-            <div className="card-label">
-              ERROR CORRELATION
-            </div>
-
-
-            <p className="small-label">
-              Shared Error Patterns
-            </p>
-
-
-            <div className="correlation-list">
-
-              {Object.entries(correlations).map(
-                ([pattern, data]) => (
-
-                  <div
-                    className="correlation-item"
-                    key={pattern}
-                  >
-
-                    <span>
-                      {pattern}
-                    </span>
-
-                    <strong>
-                      {data.count}
-                    </strong>
-
-                  </div>
-
-                )
-              )}
-
-            </div>
-
-          </div>
-
+          )}
         </section>
+      </div>
 
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <span className="eyebrow">
+              ERROR CORRELATION
+            </span>
 
-        {/* ================================
-            DEPENDENCY IMPACT
-        ================================= */}
+            <h2>Common Failure Patterns</h2>
+          </div>
+        </div>
 
-        <section className="analysis-card dependency-card">
+        <div className="correlation-list">
+          {Object.entries(correlations).map(
+            ([keyword, data]) => (
+              <div
+                className="correlation-item"
+                key={keyword}
+              >
+                <div>
+                  <strong>{keyword}</strong>
 
-          <div className="card-label">
-            DEPENDENCY IMPACT
+                  <span>
+                    {data.services?.join(", ") ||
+                      "Unknown services"}
+                  </span>
+                </div>
+
+                <div className="correlation-count">
+                  {data.count}
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <span className="eyebrow">
+              DEPENDENCY IMPACT
+            </span>
+
+            <h2>
+              Services affected by{" "}
+              {rootCause.root_cause}
+            </h2>
+          </div>
+        </div>
+
+        <div className="dependency-flow">
+          <div className="dependency-root">
+            <strong>
+              {rootCause.root_cause || "Unknown"}
+            </strong>
+
+            <span>Root Cause</span>
           </div>
 
+          <div className="dependency-arrow">
+            ↓ affects
+          </div>
 
-          <p className="small-label">
-            Services affected by{" "}
-            <strong>
-              {rootCause.root_cause}
-            </strong>
-          </p>
+          <div className="dependency-services">
+            {failingServices.map((service) => (
+              <div
+                className="dependency-service"
+                key={service}
+              >
+                <strong>{service}</strong>
 
+                <span>
+                  {patterns[service]
+                    ?.total_failures || 0}{" "}
+                  failures
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-          {/* Root dependency */}
+      <section className="panel timeline-card">
+        <div className="panel-header">
+          <div>
+            <span className="eyebrow">
+              INCIDENT TIMELINE
+            </span>
 
-          <div className="dependency-root">
+            <h2>Failure sequence</h2>
+          </div>
+        </div>
 
-            <div className="dependency-node root-node">
+        <div className="timeline">
+          {temporalAnalysis.map(
+            (item, index) => (
+              <div
+                className="timeline-item"
+                key={index}
+              >
+                <div className="timeline-marker" />
 
-              <span className="node-status"></span>
+                <div className="timeline-content">
+                  <span className="timeline-time">
+                    {formatTimestamp(
+                      item.first_failure
+                    )}
+                  </span>
 
-              <div>
+                  <strong>{item.service}</strong>
+
+                  <p>
+                    First detected failure
+                  </p>
+                </div>
+              </div>
+            )
+          )}
+
+          {rootCause.root_cause && (
+            <div className="timeline-item root-timeline">
+              <div className="timeline-marker root-marker">
+                !
+              </div>
+
+              <div className="timeline-content">
+                <span className="timeline-time">
+                  Analysis result
+                </span>
 
                 <strong>
                   {rootCause.root_cause}
                 </strong>
 
-                <small>
-                  Root Cause
-                </small>
-
+                <p>
+                  Identified as the most likely
+                  root cause
+                </p>
               </div>
-
             </div>
+          )}
+        </div>
+      </section>
 
+      {rootCause.recommendations?.length > 0 && (
+        <section className="recommendation">
+          <div className="recommendation-icon">
+            !
           </div>
 
+          <div>
+            <span className="eyebrow">
+              RECOMMENDATION
+            </span>
 
-          {/* Arrow */}
+            <h3>
+              Investigate{" "}
+              {rootCause.root_cause}
+            </h3>
 
-          {affectedServices.length > 0 && (
+            <p>
+              {rootCause.recommendations[0]}
+            </p>
+          </div>
+        </section>
+      )}
+    </>
+  );
 
-            <div className="dependency-arrow">
-              ↓ affects
-            </div>
+  // =========================================================
+  // SERVICES
+  // =========================================================
 
-          )}
+  const renderServices = () => (
+    <>
+      <div className="topbar">
+        <div>
+          <span className="eyebrow">
+            SERVICES
+          </span>
 
+          <h1>Service Health</h1>
 
-          {/* Affected services */}
+          <p>
+            Monitor service failures and RCA scores
+          </p>
+        </div>
+      </div>
 
-          <div className="affected-services">
+      <section className="service-detail-grid">
+        {services.map((service) => {
+          const data = patterns[service] || {};
 
-            {affectedServices.map(
-              (candidate) => (
+          const candidate = candidates.find(
+            (item) => item.service === service
+          );
 
-                <div
-                  className="dependency-node"
-                  key={candidate.service}
-                >
+          const isRoot =
+            service === rootCause.root_cause;
 
-                  <span className="node-status"></span>
-
-                  <div>
-
-                    <strong>
-                      {candidate.service}
-                    </strong>
-
-                    <small>
-
-                      {candidate.total_failures} failure
-                      {candidate.total_failures !== 1
-                        ? "s"
-                        : ""}
-
-                    </small>
-
-                  </div>
-
+          return (
+            <div
+              className={`service-detail-card ${
+                isRoot ? "highlight-root" : ""
+              }`}
+              key={service}
+            >
+              <div className="service-detail-header">
+                <div className="service-icon large">
+                  {service
+                    .charAt(0)
+                    .toUpperCase()}
                 </div>
 
-              )
-            )}
+                <div>
+                  <h2>{service}</h2>
 
+                  <span>
+                    {isRoot
+                      ? "Most likely root cause"
+                      : data.total_failures > 0
+                      ? "Failure detected"
+                      : "Upstream dependency"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="service-metrics">
+                <div>
+                  <span>Failures</span>
+                  <strong>
+                    {data.total_failures || 0}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Errors</span>
+                  <strong>
+                    {data.error_count || 0}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Critical</span>
+                  <strong>
+                    {data.critical_count || 0}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>RCA Score</span>
+                  <strong>
+                    {candidate?.score || 0}
+                  </strong>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </section>
+    </>
+  );
+
+  // =========================================================
+  // INCIDENT LIST
+  // =========================================================
+
+  const renderIncidentList = () => (
+    <>
+      <div className="topbar">
+        <div>
+          <span className="eyebrow">
+            INCIDENTS
+          </span>
+
+          <h1>Incident Overview</h1>
+
+          <p>
+            Failure events detected by RootCauseAI
+          </p>
+        </div>
+      </div>
+
+      <section className="incident-list-card">
+        <div className="incident-list-header">
+          <div className="incident-status-dot" />
+
+          <div>
+            <span className="eyebrow">
+              ACTIVE INCIDENT
+            </span>
+
+            <h2>
+              Database Connectivity Failure
+            </h2>
+
+            <p>
+              RootCauseAI detected correlated
+              database connection failures across
+              multiple services.
+            </p>
           </div>
 
+          <span className="incident-badge">
+            ACTIVE
+          </span>
+        </div>
 
-          {/* No affected services */}
+        <div className="incident-list-metrics">
+          <div>
+            <span>Root Cause</span>
+            <strong>
+              {rootCause.root_cause ||
+                "Unknown"}
+            </strong>
+          </div>
 
-          {affectedServices.length === 0 && (
+          <div>
+            <span>Affected Services</span>
+            <strong>
+              {failingServices.length}
+            </strong>
+          </div>
 
-            <p className="no-impact">
-              No affected services detected.
-            </p>
+          <div>
+            <span>Failures</span>
+            <strong>{totalFailures}</strong>
+          </div>
 
+          <div>
+            <span>Confidence</span>
+            <strong>
+              {rootCause.confidence ||
+                "Unknown"}
+            </strong>
+          </div>
+        </div>
+
+        <button
+          className="incident-open-button"
+          onClick={() =>
+            setIncidentSelected(true)
+          }
+        >
+          View Incident Details →
+        </button>
+      </section>
+    </>
+  );
+
+  // =========================================================
+  // INCIDENT DETAILS
+  // =========================================================
+
+  const renderIncidentDetails = () => (
+    <>
+      <div className="topbar">
+        <div>
+          <button
+            className="back-button"
+            onClick={() =>
+              setIncidentSelected(false)
+            }
+          >
+            ← Back to Incidents
+          </button>
+
+          <span className="eyebrow incident-eyebrow">
+            INCIDENT DETAILS
+          </span>
+
+          <h1>
+            Database Connectivity Failure
+          </h1>
+
+          <p>
+            RootCauseAI incident investigation
+          </p>
+        </div>
+
+        <div className="incident-detail-status">
+          <span className="incident-status-dot" />
+          ACTIVE
+        </div>
+      </div>
+
+      {/* Incident identity */}
+      <section className="incident-identity">
+        <div>
+          <span className="eyebrow">
+            INCIDENT ID
+          </span>
+
+          <strong>INC-001</strong>
+        </div>
+
+        <div>
+          <span className="eyebrow">
+            DETECTED FAILURES
+          </span>
+
+          <strong>{totalFailures}</strong>
+        </div>
+
+        <div>
+          <span className="eyebrow">
+            AFFECTED SERVICES
+          </span>
+
+          <strong>
+            {failingServices.length}
+          </strong>
+        </div>
+
+        <div>
+          <span className="eyebrow">
+            ROOT CAUSE
+          </span>
+
+          <strong>
+            {rootCause.root_cause ||
+              "Unknown"}
+          </strong>
+        </div>
+      </section>
+
+      <div className="incident-detail-grid">
+        {/* Root cause */}
+        <section className="panel incident-root-panel">
+          <span className="eyebrow">
+            ROOT CAUSE
+          </span>
+
+          <h2>
+            {rootCause.root_cause ||
+              "Unknown"}
+          </h2>
+
+          <span className="confidence-badge">
+            {rootCause.confidence ||
+              "Unknown"}{" "}
+            confidence
+          </span>
+
+          <p>
+            {rootCause.reason ||
+              "No root cause explanation available."}
+          </p>
+
+          <div className="incident-evidence">
+            <h3>Evidence</h3>
+
+            {rootCause.evidence?.map(
+              (item, index) => (
+                <div
+                  className="evidence-item"
+                  key={index}
+                >
+                  <span>✓</span>
+                  {item}
+                </div>
+              )
+            )}
+          </div>
+        </section>
+
+        {/* Impact */}
+        <section className="panel">
+          <span className="eyebrow">
+            IMPACT
+          </span>
+
+          <h2>Affected Services</h2>
+
+          <div className="impact-list">
+            {failingServices.map(
+              (service) => (
+                <div
+                  className="impact-row"
+                  key={service}
+                >
+                  <div className="impact-service">
+                    <div className="service-icon">
+                      {service
+                        .charAt(0)
+                        .toUpperCase()}
+                    </div>
+
+                    <strong>{service}</strong>
+                  </div>
+
+                  <span>
+                    {patterns[service]
+                      ?.total_failures || 0}{" "}
+                    failures
+                  </span>
+                </div>
+              )
+            )}
+          </div>
+        </section>
+      </div>
+
+      {/* Timeline */}
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <span className="eyebrow">
+              TIMELINE
+            </span>
+
+            <h2>Failure sequence</h2>
+          </div>
+        </div>
+
+        <div className="timeline incident-timeline">
+          {temporalAnalysis.map(
+            (item, index) => (
+              <div
+                className="timeline-item"
+                key={index}
+              >
+                <div className="timeline-marker" />
+
+                <div className="timeline-content">
+                  <span className="timeline-time">
+                    {formatTimestamp(
+                      item.first_failure
+                    )}
+                  </span>
+
+                  <strong>
+                    {item.service}
+                  </strong>
+
+                  <p>
+                    First detected failure
+                  </p>
+                </div>
+              </div>
+            )
           )}
 
-        </section>
-        {/* Incident Timeline */}
-<section className="analysis-card timeline-card">
-
-  <div className="card-label">
-    INCIDENT TIMELINE
-  </div>
-
-  <p className="small-label">
-    Failure sequence
-  </p>
-
-  <div className="timeline">
-
-    {(analysis.temporal_analysis || []).map(
-      (event, index) => {
-
-        const serviceData =
-          patterns[event.service] || {};
-
-        return (
-          <div className="timeline-item" key={event.service}>
-
-            <div className="timeline-marker">
-              {index + 1}
+          <div className="timeline-item root-timeline">
+            <div className="timeline-marker root-marker">
+              !
             </div>
 
             <div className="timeline-content">
-
-              <div className="timeline-time">
-                {new Date(
-                  event.first_failure
-                ).toLocaleString()}
-              </div>
+              <span className="timeline-time">
+                RCA completed
+              </span>
 
               <strong>
-                {event.service}
+                {rootCause.root_cause}
               </strong>
 
               <p>
-                {serviceData.total_failures || 0} failure
-                {serviceData.total_failures === 1
-                  ? ""
-                  : "s"} detected
+                Identified as the most likely
+                upstream cause
               </p>
-
             </div>
-
           </div>
-        );
-      }
-    )}
+        </div>
+      </section>
 
-    <div className="timeline-item root-timeline">
+      {/* Correlations */}
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <span className="eyebrow">
+              CORRELATED SIGNALS
+            </span>
 
-      <div className="timeline-marker root-marker">
-        ◆
-      </div>
-
-      <div className="timeline-content">
-
-        <div className="timeline-time">
-          ROOT CAUSE
+            <h2>Failure patterns</h2>
+          </div>
         </div>
 
-        <strong>
-          {rootCause.root_cause}
-        </strong>
+        <div className="correlation-list">
+          {Object.entries(correlations).map(
+            ([keyword, data]) => (
+              <div
+                className="correlation-item"
+                key={keyword}
+              >
+                <div>
+                  <strong>{keyword}</strong>
 
-        <p>
-          Upstream dependency identified by
-          dependency analysis
-        </p>
+                  <span>
+                    {data.services?.join(
+                      ", "
+                    )}
+                  </span>
+                </div>
 
-      </div>
+                <div className="correlation-count">
+                  {data.count}
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      </section>
 
-    </div>
+      {/* Raw logs */}
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <span className="eyebrow">
+              INCIDENT LOGS
+            </span>
 
-  </div>
-
-</section>
-
-
-        {/* ================================
-            RECOMMENDATION
-        ================================= */}
-
-        <section className="recommendation">
-
-          <div className="recommendation-icon">
-            →
+            <h2>Related telemetry</h2>
           </div>
 
+          <span className="panel-count">
+            {logs.length} logs
+          </span>
+        </div>
+
+        <div className="incident-log-list">
+          {logs.map((log) => (
+            <div
+              className="incident-log-row"
+              key={log.id}
+            >
+              <span className="incident-log-time">
+                {formatTimestamp(
+                  log.timestamp
+                )}
+              </span>
+
+              <span className="service-badge">
+                {log.service}
+              </span>
+
+              <span
+                className={`level-badge ${getLevelClass(
+                  log.level
+                )}`}
+              >
+                {log.level}
+              </span>
+
+              <span className="incident-log-message">
+                {log.message}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Recommendation */}
+      {rootCause.recommendations?.length >
+        0 && (
+        <section className="recommendation">
+          <div className="recommendation-icon">
+            !
+          </div>
 
           <div>
+            <span className="eyebrow">
+              RECOMMENDED ACTION
+            </span>
 
-            <p className="eyebrow">
-              RECOMMENDATION
-            </p>
-
-
-            <h2>
+            <h3>
               Investigate{" "}
               {rootCause.root_cause}
-            </h2>
-
+            </h3>
 
             <p>
-
-              {rootCause.recommendations?.[0] ||
-                `Investigate ${rootCause.root_cause} and its dependencies.`}
-
+              {rootCause.recommendations[0]}
             </p>
+          </div>
+        </section>
+      )}
+    </>
+  );
 
+  // =========================================================
+  // LOGS
+  // =========================================================
+
+  const renderLogs = () => (
+    <>
+      <div className="topbar">
+        <div>
+          <span className="eyebrow">
+            TELEMETRY
+          </span>
+
+          <h1>System Logs</h1>
+
+          <p>
+            Raw telemetry collected by RootCauseAI
+          </p>
+        </div>
+
+        <button
+          className="refresh-button"
+          onClick={fetchLogs}
+          disabled={logsLoading}
+        >
+          {logsLoading
+            ? "Refreshing..."
+            : "↻ Refresh Logs"}
+        </button>
+      </div>
+
+      <section className="panel logs-panel">
+        <div className="logs-toolbar">
+          <div className="log-search">
+            <span>⌕</span>
+
+            <input
+              type="text"
+              placeholder="Search logs..."
+              value={logSearch}
+              onChange={(e) =>
+                setLogSearch(e.target.value)
+              }
+            />
           </div>
 
-        </section>
+          <select
+            value={serviceFilter}
+            onChange={(e) =>
+              setServiceFilter(e.target.value)
+            }
+          >
+            <option value="All">
+              All Services
+            </option>
 
+            {uniqueServices.map(
+              (service) => (
+                <option
+                  value={service}
+                  key={service}
+                >
+                  {service}
+                </option>
+              )
+            )}
+          </select>
+
+          <select
+            value={levelFilter}
+            onChange={(e) =>
+              setLevelFilter(e.target.value)
+            }
+          >
+            <option value="All">
+              All Levels
+            </option>
+
+            {uniqueLevels.map(
+              (level) => (
+                <option
+                  value={level}
+                  key={level}
+                >
+                  {level}
+                </option>
+              )
+            )}
+          </select>
+        </div>
+
+        <div className="logs-summary">
+          <span>
+            Showing{" "}
+            <strong>
+              {filteredLogs.length}
+            </strong>{" "}
+            of{" "}
+            <strong>{logs.length}</strong>{" "}
+            logs
+          </span>
+
+          {(logSearch ||
+            serviceFilter !== "All" ||
+            levelFilter !== "All") && (
+            <button
+              className="clear-filters"
+              onClick={() => {
+                setLogSearch("");
+                setServiceFilter("All");
+                setLevelFilter("All");
+              }}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+
+        {logsLoading ? (
+          <div className="logs-empty">
+            <div className="mini-spinner" />
+            <p>Loading telemetry...</p>
+          </div>
+        ) : filteredLogs.length === 0 ? (
+          <div className="logs-empty">
+            <div className="empty-icon">
+              ⌁
+            </div>
+
+            <h3>No logs found</h3>
+
+            <p>
+              Try changing your search or
+              filter settings.
+            </p>
+          </div>
+        ) : (
+          <div className="logs-table-wrapper">
+            <table className="logs-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Service</th>
+                  <th>Level</th>
+                  <th>Message</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {filteredLogs.map((log) => (
+                  <tr key={log.id}>
+                    <td className="log-time">
+                      {formatTimestamp(
+                        log.timestamp
+                      )}
+                    </td>
+
+                    <td>
+                      <span className="service-badge">
+                        {log.service}
+                      </span>
+                    </td>
+
+                    <td>
+                      <span
+                        className={`level-badge ${getLevelClass(
+                          log.level
+                        )}`}
+                      >
+                        {log.level}
+                      </span>
+                    </td>
+
+                    <td className="log-message">
+                      {log.message}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </>
+  );
+
+  // =========================================================
+  // ANALYSIS
+  // =========================================================
+
+  const renderAnalysis = () => (
+    <>
+      <div className="topbar">
+        <div>
+          <span className="eyebrow">
+            ANALYSIS ENGINE
+          </span>
+
+          <h1>Root Cause Analysis</h1>
+
+          <p>
+            Evidence-based failure candidate
+            ranking
+          </p>
+        </div>
+
+        <button
+          className="refresh-button"
+          onClick={fetchAnalysis}
+          disabled={loading}
+        >
+          ↻ Run Analysis
+        </button>
+      </div>
+
+      <section className="panel analysis-main">
+        <div className="analysis-result">
+          <span className="eyebrow">
+            MOST LIKELY ROOT CAUSE
+          </span>
+
+          <h2>
+            {rootCause.root_cause ||
+              "Unknown"}
+          </h2>
+
+          <span className="confidence-badge">
+            {rootCause.confidence ||
+              "Unknown"}{" "}
+            confidence
+          </span>
+
+          <p>
+            {rootCause.reason ||
+              "No explanation is currently available."}
+          </p>
+        </div>
+
+        <div className="analysis-evidence">
+          <h3>Evidence</h3>
+
+          {rootCause.evidence?.length ? (
+            rootCause.evidence.map(
+              (item, index) => (
+                <div
+                  className="evidence-item"
+                  key={index}
+                >
+                  <span>✓</span>
+                  {item}
+                </div>
+              )
+            )
+          ) : (
+            <p>No evidence available.</p>
+          )}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <span className="eyebrow">
+              CANDIDATE RANKING
+            </span>
+
+            <h2>
+              Root Cause Candidates
+            </h2>
+          </div>
+        </div>
+
+        <div className="candidate-list">
+          {candidates.map(
+            (candidate, index) => (
+              <div
+                className="candidate-card"
+                key={candidate.service}
+              >
+                <div className="candidate-rank">
+                  #{index + 1}
+                </div>
+
+                <div className="candidate-info">
+                  <strong>
+                    {candidate.service}
+                  </strong>
+
+                  <span>
+                    Overall RCA score:{" "}
+                    {candidate.score}
+                  </span>
+                </div>
+
+                <div className="candidate-scores">
+                  <span>
+                    Failure{" "}
+                    <strong>
+                      {candidate.failure_score}
+                    </strong>
+                  </span>
+
+                  <span>
+                    Temporal{" "}
+                    <strong>
+                      {candidate.temporal_score}
+                    </strong>
+                  </span>
+
+                  <span>
+                    Correlation{" "}
+                    <strong>
+                      {candidate.correlation_score}
+                    </strong>
+                  </span>
+
+                  <span>
+                    Dependency{" "}
+                    <strong>
+                      {candidate.dependency_score}
+                    </strong>
+                  </span>
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      </section>
+    </>
+  );
+
+  // =========================================================
+  // PAGE ROUTING
+  // =========================================================
+
+  const renderPage = () => {
+    if (
+      activePage === "Incidents" &&
+      incidentSelected
+    ) {
+      return renderIncidentDetails();
+    }
+
+    switch (activePage) {
+      case "Services":
+        return renderServices();
+
+      case "Incidents":
+        return renderIncidentList();
+
+      case "Logs":
+        return renderLogs();
+
+      case "Analysis":
+        return renderAnalysis();
+
+      default:
+        return renderDashboard();
+    }
+  };
+
+  if (loading && !analysis) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-logo">R</div>
+
+        <h2>RootCauseAI</h2>
+
+        <p>
+          Loading system intelligence...
+        </p>
+      </div>
+    );
+  }
+
+  if (error && !analysis) {
+    return (
+      <div className="error-screen">
+        <div className="error-icon">!</div>
+
+        <h2>Backend unavailable</h2>
+
+        <p>{error}</p>
+
+        <button
+          className="refresh-button"
+          onClick={fetchAnalysis}
+        >
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-logo">R</div>
+
+          <div>
+            <strong>RootCauseAI</strong>
+            <span>
+              System Intelligence
+            </span>
+          </div>
+        </div>
+
+        <nav>
+          {[
+            "Dashboard",
+            "Services",
+            "Incidents",
+            "Logs",
+            "Analysis"
+          ].map((page) => (
+            <a
+              key={page}
+              className={
+                activePage === page
+                  ? "active"
+                  : ""
+              }
+              onClick={() =>
+                handleNavigation(page)
+              }
+            >
+              <span className="nav-dot" />
+              {page}
+            </a>
+          ))}
+        </nav>
+
+        <div className="sidebar-status">
+          <span className="live-dot" />
+
+          <div>
+            <strong>
+              Backend Connected
+            </strong>
+
+            <span>
+              Live analysis enabled
+            </span>
+          </div>
+        </div>
+      </aside>
+
+      <main className="main-content">
+        {renderPage()}
       </main>
-
     </div>
   );
 }

@@ -17,182 +17,6 @@ router = APIRouter(
 
 
 # =========================================================
-# ROOT CAUSE EXPLANATION
-# =========================================================
-
-def build_root_cause_explanation(candidates):
-
-    if not candidates:
-        return {
-            "root_cause": None,
-            "confidence": "low",
-            "reason": "No root-cause candidates were identified.",
-            "evidence": [],
-            "recommendations": [],
-            "rca_score": 0
-        }
-
-    ranked_candidates = []
-
-    for candidate in candidates:
-
-        base_score = candidate.get(
-            "score",
-            0
-        )
-
-        dependency_score = candidate.get(
-            "dependency_score",
-            0
-        )
-
-        rca_score = (
-            base_score +
-            dependency_score * 5
-        )
-
-        ranked_candidates.append(
-            {
-                **candidate,
-                "rca_score": rca_score
-            }
-        )
-
-    ranked_candidates.sort(
-        key=lambda candidate: candidate["rca_score"],
-        reverse=True
-    )
-
-    best = ranked_candidates[0]
-
-    root_cause = best.get("service")
-
-    base_score = best.get(
-        "score",
-        0
-    )
-
-    rca_score = best.get(
-        "rca_score",
-        0
-    )
-
-    failure_score = best.get(
-        "failure_score",
-        0
-    )
-
-    temporal_score = best.get(
-        "temporal_score",
-        0
-    )
-
-    correlation_score = best.get(
-        "correlation_score",
-        0
-    )
-
-    dependency_score = best.get(
-        "dependency_score",
-        0
-    )
-
-    evidence_count = sum(
-        [
-            failure_score > 0,
-            temporal_score > 0,
-            correlation_score > 0,
-            dependency_score > 0
-        ]
-    )
-
-    if evidence_count >= 3 and rca_score >= 10:
-
-        confidence = "high"
-
-    elif evidence_count >= 2 or rca_score >= 8:
-
-        confidence = "medium"
-
-    else:
-
-        confidence = "low"
-
-    if dependency_score > 0:
-
-        reason = (
-            f"{root_cause} is the strongest root-cause "
-            "candidate after combining failure, temporal, "
-            "correlation, and dependency evidence. "
-            f"Its dependency evidence increased its RCA score "
-            f"from {base_score} to {rca_score}, indicating "
-            "that it may be an upstream cause."
-        )
-
-    else:
-
-        reason = (
-            f"{root_cause} is the strongest root-cause "
-            "candidate after combining failure, temporal, "
-            "correlation, and dependency evidence."
-        )
-
-    evidence = []
-
-    if failure_score > 0:
-
-        evidence.append(
-            f"{root_cause} has "
-            f"{best.get('total_failures', 0)} "
-            "detected failure(s), including "
-            f"{best.get('error_count', 0)} error(s) and "
-            f"{best.get('critical_count', 0)} critical event(s)."
-        )
-
-    if temporal_score > 0:
-
-        evidence.append(
-            f"{root_cause} has temporal evidence "
-            "indicating that its failure occurred "
-            "early in the incident."
-        )
-
-    if correlation_score > 0:
-
-        evidence.append(
-            f"{root_cause} is associated with "
-            "correlated failure messages across "
-            "affected services."
-        )
-
-    if dependency_score > 0:
-
-        evidence.append(
-            f"{dependency_score} failing service(s) "
-            f"depend on {root_cause}, indicating "
-            "that the service may be an upstream cause."
-        )
-
-    recommendations = [
-        f"Investigate {root_cause}",
-        (
-            f"Check the health and availability of "
-            f"{root_cause} because it is a potential "
-            "upstream dependency."
-        )
-    ]
-
-    return {
-        "root_cause": root_cause,
-        "confidence": confidence,
-        "reason": reason,
-        "evidence": evidence,
-        "recommendations": recommendations,
-        "rca_score": rca_score
-    }
-
-
-# =========================================================
 # INGEST LOG + AUTOMATIC INCIDENT GENERATION
 # =========================================================
 
@@ -201,18 +25,22 @@ def ingest_log(
     log: LogEntry,
     db: Session = Depends(get_db)
 ):
+    """
+    Store incoming telemetry and automatically process
+    incident detection and RCA.
 
-    # -----------------------------------------------------
-    # 1. Classify incoming log
-    # -----------------------------------------------------
+    IMPORTANT:
+
+    The newly ingested log is passed explicitly as the
+    incident trigger.
+
+    Historical logs remain available as RCA context,
+    but they cannot replace the current trigger event.
+    """
 
     severity = classify_log_level(
         log.level
     )
-
-    # -----------------------------------------------------
-    # 2. Store telemetry
-    # -----------------------------------------------------
 
     db_log = Log(
         service=log.service,
@@ -221,32 +49,37 @@ def ingest_log(
         timestamp=log.timestamp
     )
 
-    db.add(db_log)
-    db.commit()
-    db.refresh(db_log)
+    db.add(
+        db_log
+    )
 
-    # -----------------------------------------------------
-    # 3. Fetch all logs
-    # -----------------------------------------------------
+    db.commit()
+
+    db.refresh(
+        db_log
+    )
+
+    # =====================================================
+    # LOAD HISTORICAL TELEMETRY
+    # =====================================================
 
     logs = (
         db.query(Log)
-        .order_by(Log.timestamp.asc())
+        .order_by(
+            Log.timestamp.asc()
+        )
         .all()
     )
 
-    # -----------------------------------------------------
-    # 4. Incident Service performs the official RCA
-    # -----------------------------------------------------
+    # =====================================================
+    # AUTOMATIC INCIDENT PROCESSING
+    # =====================================================
 
     incident = get_or_create_incident(
-        db,
-        logs
+        db=db,
+        logs=logs,
+        trigger_log=db_log
     )
-
-    # -----------------------------------------------------
-    # 5. Use incident RCA as the single source of truth
-    # -----------------------------------------------------
 
     if incident:
 
@@ -275,10 +108,6 @@ def ingest_log(
 
         incident_summary = None
 
-    # -----------------------------------------------------
-    # 6. Return result
-    # -----------------------------------------------------
-
     return {
         "status": "stored",
         "message": "Log successfully stored",
@@ -306,10 +135,15 @@ def ingest_log(
 def get_telemetry_logs(
     db: Session = Depends(get_db)
 ):
+    """
+    Return all stored telemetry logs.
+    """
 
     logs = (
         db.query(Log)
-        .order_by(Log.timestamp.asc())
+        .order_by(
+            Log.timestamp.asc()
+        )
         .all()
     )
 
@@ -326,29 +160,30 @@ def get_telemetry_logs(
 
 
 # =========================================================
-# RUN COMPLETE ANALYSIS
+# RUN COMPLETE CANONICAL ANALYSIS
 # =========================================================
 
 @router.get("/analysis")
 def get_log_analysis(
     db: Session = Depends(get_db)
 ):
+    """
+    Run the canonical RCA engine against all telemetry.
+
+    All RCA scoring and explanation comes from
+    analyze_logs().
+    """
 
     logs = (
         db.query(Log)
-        .order_by(Log.timestamp.asc())
+        .order_by(
+            Log.timestamp.asc()
+        )
         .all()
     )
 
     result = analyze_logs(
         logs
-    )
-
-    explanation = build_root_cause_explanation(
-        result.get(
-            "candidates",
-            []
-        )
     )
 
     return {
@@ -367,12 +202,29 @@ def get_log_analysis(
             {}
         ),
 
+        "dependency_scores": result.get(
+            "dependency_scores",
+            {}
+        ),
+
         "candidates": result.get(
             "candidates",
             []
         ),
 
-        "root_cause_explanation": explanation,
+        "evidence": result.get(
+            "evidence",
+            []
+        ),
 
-        "root_cause": explanation
+        "root_cause_explanation": result.get(
+            "root_cause_explanation",
+            {}
+        ),
+
+        # Compatibility alias for the frontend.
+        "root_cause": result.get(
+            "root_cause_explanation",
+            {}
+        )
     }

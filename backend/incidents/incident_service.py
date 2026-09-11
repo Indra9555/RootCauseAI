@@ -30,7 +30,9 @@ def parse_timestamp(timestamp):
         )
 
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(
+            tzinfo=timezone.utc
+        )
 
     return dt
 
@@ -43,28 +45,44 @@ def get_log_service(log):
     if isinstance(log, dict):
         return log.get("service")
 
-    return getattr(log, "service", None)
+    return getattr(
+        log,
+        "service",
+        None
+    )
 
 
 def get_log_level(log):
     if isinstance(log, dict):
         return log.get("level")
 
-    return getattr(log, "level", None)
+    return getattr(
+        log,
+        "level",
+        None
+    )
 
 
 def get_log_message(log):
     if isinstance(log, dict):
         return log.get("message")
 
-    return getattr(log, "message", None)
+    return getattr(
+        log,
+        "message",
+        None
+    )
 
 
 def get_log_timestamp(log):
     if isinstance(log, dict):
         return log.get("timestamp")
 
-    return getattr(log, "timestamp", None)
+    return getattr(
+        log,
+        "timestamp",
+        None
+    )
 
 
 # =========================================================
@@ -76,15 +94,8 @@ def services_are_related(
     service_b
 ):
     """
-    Determine whether two services can belong to
-    the same incident.
-
-    Services are related when:
-
-    1. They are the same service.
-    2. service_a depends on service_b.
-    3. service_b depends on service_a.
-    4. One service is a dependent of the other.
+    Determine whether two services can belong
+    to the same incident.
     """
 
     if not service_a or not service_b:
@@ -129,12 +140,13 @@ def incident_services_are_related(
     incoming_services
 ):
     """
-    Check whether incoming services are related to
-    services already belonging to the incident.
+    Check whether incoming services are related
+    to services already affected by an incident.
     """
 
     existing_services = (
-        incident.affected_services or []
+        incident.affected_services
+        or []
     )
 
     if not existing_services:
@@ -154,42 +166,30 @@ def incident_services_are_related(
 
 
 # =========================================================
-# RCA HELPERS
+# CANONICAL RCA
 # =========================================================
-
-def calculate_confidence(candidates):
-
-    if not candidates:
-        return "low"
-
-    if len(candidates) == 1:
-        return "high"
-
-    first_score = candidates[0].get(
-        "score",
-        0
-    )
-
-    second_score = candidates[1].get(
-        "score",
-        0
-    )
-
-    if first_score >= second_score + 3:
-        return "high"
-
-    if first_score > second_score:
-        return "medium"
-
-    return "low"
-
 
 def build_incident_data(logs):
     """
-    Analyze only logs belonging to one incident.
+    Build incident data using the canonical RootCauseAI
+    RCA engine.
+
+    analyze_logs() is the single source of truth for:
+
+    - root cause
+    - confidence
+    - RCA score
+    - reasoning
+    - evidence
+    - recommendations
     """
 
-    analysis = analyze_logs(logs)
+    if not logs:
+        return None
+
+    analysis = analyze_logs(
+        logs
+    )
 
     candidates = analysis.get(
         "candidates",
@@ -199,25 +199,48 @@ def build_incident_data(logs):
     if not candidates:
         return None
 
-    root_cause_candidate = candidates[0]
-
-    root_cause = root_cause_candidate.get(
-        "service",
-        "unknown"
+    rca = analysis.get(
+        "root_cause_explanation",
+        {}
     )
 
-    rca_score = root_cause_candidate.get(
-        "score",
-        0
+    root_cause = rca.get(
+        "root_cause"
     )
 
-    confidence = calculate_confidence(
-        candidates
+    if not root_cause:
+        root_cause = candidates[0].get(
+            "service",
+            "unknown"
+        )
+
+    confidence = rca.get(
+        "confidence",
+        "low"
     )
 
-    # -----------------------------------------------------
-    # FAILURE COUNT
-    # -----------------------------------------------------
+    rca_score = rca.get(
+        "rca_score",
+        candidates[0].get(
+            "score",
+            0
+        )
+    )
+
+    evidence = rca.get(
+        "evidence",
+        []
+    )
+
+    recommendations = rca.get(
+        "recommendations",
+        []
+    )
+
+    reason = rca.get(
+        "reason",
+        ""
+    )
 
     failure_count = len(
         [
@@ -225,14 +248,10 @@ def build_incident_data(logs):
             for log in logs
             if str(
                 get_log_level(log) or ""
-            ).upper()
-            in ["ERROR", "CRITICAL"]
+            ).upper().strip()
+            in ("ERROR", "CRITICAL")
         ]
     )
-
-    # -----------------------------------------------------
-    # AFFECTED SERVICES
-    # -----------------------------------------------------
 
     affected_services = sorted(
         list(
@@ -243,10 +262,6 @@ def build_incident_data(logs):
             )
         )
     )
-
-    # -----------------------------------------------------
-    # TIMESTAMPS
-    # -----------------------------------------------------
 
     timestamps = [
         parse_timestamp(
@@ -262,47 +277,31 @@ def build_incident_data(logs):
         else datetime.now(timezone.utc)
     )
 
-    # -----------------------------------------------------
-    # EVIDENCE
-    # -----------------------------------------------------
+    if not evidence:
 
-    evidence = []
+        evidence = [
+            f"{root_cause} is the top-ranked "
+            "root-cause candidate."
+        ]
 
-    evidence.append(
-        f"{root_cause} has "
-        f"{failure_count} detected failure(s)."
-    )
+    if not recommendations:
 
-    if len(logs) >= 2:
+        recommendations = [
+            f"Investigate {root_cause}.",
+            (
+                f"Check the health and availability "
+                f"of {root_cause}."
+            )
+        ]
 
-        evidence.append(
-            f"{root_cause} is associated with multiple "
-            f"failure events in the incident window."
+    explanation = reason
+
+    if not explanation:
+
+        explanation = (
+            f"{root_cause} is the strongest "
+            "root-cause candidate."
         )
-
-    # -----------------------------------------------------
-    # RECOMMENDATIONS
-    # -----------------------------------------------------
-
-    recommendations = [
-        f"Investigate {root_cause}",
-        (
-            f"Check the health and availability of "
-            f"{root_cause} because it is a potential "
-            f"upstream dependency."
-        )
-    ]
-
-    # -----------------------------------------------------
-    # EXPLANATION
-    # -----------------------------------------------------
-
-    explanation = (
-        f"{root_cause} is the strongest root-cause "
-        f"candidate after combining failure, temporal, "
-        f"correlation, and dependency evidence. "
-        f"The final RCA score is {rca_score}."
-    )
 
     return {
         "root_cause": root_cause,
@@ -328,14 +327,16 @@ def get_failure_logs(logs):
         for log in logs
         if str(
             get_log_level(log) or ""
-        ).upper()
-        in ["ERROR", "CRITICAL"]
+        ).upper().strip()
+        in ("ERROR", "CRITICAL")
     ]
 
 
 def get_latest_failure_time(logs):
 
-    failure_logs = get_failure_logs(logs)
+    failure_logs = get_failure_logs(
+        logs
+    )
 
     timestamps = [
         parse_timestamp(
@@ -349,6 +350,109 @@ def get_latest_failure_time(logs):
         return None
 
     return max(timestamps)
+
+
+# =========================================================
+# INCIDENT WINDOW
+# =========================================================
+
+def get_incident_window_logs(
+    logs,
+    trigger_time,
+    affected_services=None
+):
+    """
+    Return failure logs that belong to the incident
+    window ending at the trigger time.
+
+    IMPORTANT:
+
+    Logs after the trigger time are NEVER included.
+
+    This prevents a later telemetry event from
+    influencing the current incident.
+    """
+
+    trigger_time = parse_timestamp(
+        trigger_time
+    )
+
+    window_start = (
+        trigger_time
+        - timedelta(
+            minutes=INCIDENT_WINDOW_MINUTES
+        )
+    )
+
+    affected_services = set(
+        affected_services or []
+    )
+
+    selected_logs = []
+
+    for log in logs:
+
+        timestamp = get_log_timestamp(
+            log
+        )
+
+        if not timestamp:
+            continue
+
+        log_time = parse_timestamp(
+            timestamp
+        )
+
+        if log_time < window_start:
+            continue
+
+        if log_time > trigger_time:
+            continue
+
+        level = str(
+            get_log_level(log) or ""
+        ).upper().strip()
+
+        if level not in (
+            "ERROR",
+            "CRITICAL"
+        ):
+            continue
+
+        service = get_log_service(
+            log
+        )
+
+        if not service:
+            continue
+
+        if affected_services:
+
+            related = False
+
+            for existing_service in affected_services:
+
+                if services_are_related(
+                    service,
+                    existing_service
+                ):
+                    related = True
+                    break
+
+            if not related:
+                continue
+
+        selected_logs.append(
+            log
+        )
+
+    selected_logs.sort(
+        key=lambda log: parse_timestamp(
+            get_log_timestamp(log)
+        )
+    )
+
+    return selected_logs
 
 
 # =========================================================
@@ -369,10 +473,14 @@ def create_incident_event(
         event_type=event_type,
         service=service,
         message=message,
-        timestamp=parse_timestamp(timestamp)
+        timestamp=parse_timestamp(
+            timestamp
+        )
     )
 
-    db.add(event)
+    db.add(
+        event
+    )
 
     return event
 
@@ -420,13 +528,20 @@ def create_failure_events(
 
     for log in logs:
 
-        timestamp = get_log_timestamp(log)
+        timestamp = get_log_timestamp(
+            log
+        )
 
         if not timestamp:
             continue
 
-        service = get_log_service(log)
-        message = get_log_message(log)
+        service = get_log_service(
+            log
+        )
+
+        message = get_log_message(
+            log
+        )
 
         if failure_event_exists(
             db=db,
@@ -584,7 +699,8 @@ def resolve_stale_incidents(
         )
 
         inactivity_duration = (
-            reference_time - latest_failure
+            reference_time
+            - latest_failure
         )
 
         if inactivity_duration > timedelta(
@@ -593,7 +709,9 @@ def resolve_stale_incidents(
 
             incident.status = "RESOLVED"
 
-            incident.ended_at = latest_failure
+            incident.ended_at = (
+                latest_failure
+            )
 
             create_incident_event(
                 db=db,
@@ -626,12 +744,18 @@ def resolve_stale_incidents(
 def find_related_active_incident(
     db: Session,
     incoming_services,
-    latest_failure_time
+    trigger_time
 ):
     """
-    Search ALL active incidents and return the most recent
-    incident that is actually related to the incoming failure.
+    Search active incidents and return the most recent
+    incident related to the incoming failure.
+
+    The comparison is based on the NEW trigger time.
     """
+
+    trigger_time = parse_timestamp(
+        trigger_time
+    )
 
     active_incidents = (
         db.query(Incident)
@@ -655,16 +779,17 @@ def find_related_active_incident(
         if not latest_failure_event:
             continue
 
-        existing_latest_failure = parse_timestamp(
-            latest_failure_event.timestamp
+        existing_latest_failure = (
+            parse_timestamp(
+                latest_failure_event.timestamp
+            )
         )
 
         time_since_failure = (
-            latest_failure_time
+            trigger_time
             - existing_latest_failure
         )
 
-        # Ignore future/out-of-order failures.
         if time_since_failure < timedelta(0):
             continue
 
@@ -689,7 +814,6 @@ def find_related_active_incident(
     if not matching_incidents:
         return None
 
-    # Most recently active related incident wins.
     matching_incidents.sort(
         key=lambda item: item[0],
         reverse=True
@@ -704,298 +828,254 @@ def find_related_active_incident(
 
 def get_or_create_incident(
     db: Session,
-    logs
+    logs,
+    trigger_log
 ):
+    """
+    Get or create an incident using the newly ingested
+    telemetry log as the trigger.
+
+    IMPORTANT:
+
+    The trigger_log determines:
+
+    - which failure started processing
+    - incident time
+    - stale incident resolution
+    - related active incident lookup
+
+    Historical logs are used only as supporting context.
+    """
 
     if not logs:
         return None
 
-    # -----------------------------------------------------
-    # SORT LOGS
-    # -----------------------------------------------------
-
-    sorted_logs = sorted(
-        logs,
-        key=lambda log: parse_timestamp(
-            get_log_timestamp(log)
-        )
-    )
-
-    # -----------------------------------------------------
-    # FAILURE LOGS
-    # -----------------------------------------------------
-
-    failure_logs = get_failure_logs(
-        sorted_logs
-    )
-
-    if not failure_logs:
+    if not trigger_log:
         return None
 
-    # -----------------------------------------------------
-    # IMPORTANT:
-    # THE INCOMING LOG IS THE LATEST FAILURE
-    # -----------------------------------------------------
-
-    latest_failure_time = get_latest_failure_time(
-        failure_logs
+    trigger_timestamp = get_log_timestamp(
+        trigger_log
     )
 
-    if latest_failure_time is None:
+    trigger_service = get_log_service(
+        trigger_log
+    )
+
+    trigger_level = str(
+        get_log_level(trigger_log) or ""
+    ).upper().strip()
+
+    if not trigger_timestamp:
         return None
 
-    # -----------------------------------------------------
-    # RESOLVE STALE INCIDENTS
-    # -----------------------------------------------------
+    if not trigger_service:
+        return None
+
+    if trigger_level not in (
+        "ERROR",
+        "CRITICAL"
+    ):
+        return None
+
+    trigger_time = parse_timestamp(
+        trigger_timestamp
+    )
+
+    # =====================================================
+    # RESOLVE OLD INCIDENTS
+    # =====================================================
 
     resolve_stale_incidents(
         db=db,
-        reference_time=latest_failure_time
+        reference_time=trigger_time
     )
-
-    # -----------------------------------------------------
-    # REFRESH SESSION
-    # -----------------------------------------------------
 
     db.expire_all()
 
-    # -----------------------------------------------------
-    # IDENTIFY INCOMING SERVICES
-    #
-    # IMPORTANT:
-    # We use the newest failure logs to determine what
-    # service(s) actually triggered this processing.
-    # -----------------------------------------------------
+    # =====================================================
+    # FIND RELATED ACTIVE INCIDENT
+    # =====================================================
 
-    latest_failure_logs = [
-        log
-        for log in failure_logs
-        if parse_timestamp(
-            get_log_timestamp(log)
-        ) == latest_failure_time
+    incoming_services = [
+        trigger_service
     ]
 
-    incoming_services = sorted(
-        list(
-            set(
-                get_log_service(log)
-                for log in latest_failure_logs
-                if get_log_service(log)
-            )
+    active_incident = (
+        find_related_active_incident(
+            db=db,
+            incoming_services=incoming_services,
+            trigger_time=trigger_time
         )
     )
 
-    if not incoming_services:
-        return None
-
     # =====================================================
-    # FIND RELATED EXISTING INCIDENT
-    # =====================================================
-
-    active_incident = find_related_active_incident(
-        db=db,
-        incoming_services=incoming_services,
-        latest_failure_time=latest_failure_time
-    )
-
-    # =====================================================
-    # UPDATE EXISTING RELATED INCIDENT
+    # UPDATE EXISTING INCIDENT
     # =====================================================
 
     if active_incident:
 
-        latest_failure_event = (
-            get_latest_failure_event(
-                db=db,
-                incident_id=active_incident.incident_id
+        existing_services = set(
+            active_incident.affected_services
+            or []
+        )
+
+        existing_services.add(
+            trigger_service
+        )
+
+        incident_logs = (
+            get_incident_window_logs(
+                logs=logs,
+                trigger_time=trigger_time,
+                affected_services=existing_services
             )
         )
 
+        # Always include the trigger log.
+        if trigger_log not in incident_logs:
+            incident_logs.append(
+                trigger_log
+            )
+
+        incident_logs.sort(
+            key=lambda log: parse_timestamp(
+                get_log_timestamp(log)
+            )
+        )
+
+        incident_data = build_incident_data(
+            incident_logs
+        )
+
+        if not incident_data:
+            return None
+
+        latest_failure_event = (
+            get_latest_failure_event(
+                db=db,
+                incident_id=(
+                    active_incident.incident_id
+                )
+            )
+        )
+
+        existing_latest_failure = None
+
         if latest_failure_event:
 
-            existing_latest_failure = parse_timestamp(
-                latest_failure_event.timestamp
-            )
-
-            # -------------------------------------------------
-            # ONLY TAKE LOGS THAT BELONG TO THIS INCIDENT
-            #
-            # We do NOT use the global 30-minute window.
-            # We walk backwards from the incoming failure and
-            # keep only services related to the incident.
-            # -------------------------------------------------
-
-            incident_start_time = (
-                existing_latest_failure
-            )
-
-            incident_logs = []
-
-            existing_services = set(
-                active_incident.affected_services or []
-            )
-
-            for log in sorted(
-                failure_logs,
-                key=lambda item: parse_timestamp(
-                    get_log_timestamp(item)
-                )
-            ):
-
-                log_time = parse_timestamp(
-                    get_log_timestamp(log)
-                )
-
-                if log_time > latest_failure_time:
-                    continue
-
-                if log_time < (
-                    latest_failure_time
-                    - timedelta(
-                        minutes=INCIDENT_WINDOW_MINUTES
-                    )
-                ):
-                    continue
-
-                service = get_log_service(log)
-
-                if not service:
-                    continue
-
-                related_to_incident = False
-
-                for existing_service in existing_services:
-
-                    if services_are_related(
-                        service,
-                        existing_service
-                    ):
-                        related_to_incident = True
-                        break
-
-                # Incoming service itself is always allowed.
-                if service in incoming_services:
-                    related_to_incident = True
-
-                if related_to_incident:
-                    incident_logs.append(log)
-
-            # Always include the incoming failure.
-            for log in latest_failure_logs:
-
-                if log not in incident_logs:
-                    incident_logs.append(log)
-
-            # Sort again after filtering.
-            incident_logs.sort(
-                key=lambda item: parse_timestamp(
-                    get_log_timestamp(item)
+            existing_latest_failure = (
+                parse_timestamp(
+                    latest_failure_event.timestamp
                 )
             )
 
-            # -------------------------------------------------
-            # RCA ONLY FOR THIS INCIDENT
-            # -------------------------------------------------
+        active_incident.root_cause = (
+            incident_data["root_cause"]
+        )
 
-            incident_data = build_incident_data(
-                incident_logs
+        active_incident.confidence = (
+            incident_data["confidence"]
+        )
+
+        active_incident.rca_score = (
+            incident_data["rca_score"]
+        )
+
+        active_incident.failure_count = (
+            incident_data["failure_count"]
+        )
+
+        active_incident.affected_services = (
+            incident_data["affected_services"]
+        )
+
+        active_incident.evidence = (
+            incident_data["evidence"]
+        )
+
+        active_incident.recommendations = (
+            incident_data["recommendations"]
+        )
+
+        active_incident.explanation = (
+            incident_data["explanation"]
+        )
+
+        active_incident.title = (
+            f"{incident_data['root_cause']} "
+            f"Failure Detected"
+        )
+
+        # Only create failure events that are newer
+        # than the previous incident failure.
+        new_failure_logs = []
+
+        for log in incident_logs:
+
+            log_time = parse_timestamp(
+                get_log_timestamp(log)
             )
 
-            if not incident_data:
-                return None
+            if existing_latest_failure is not None:
 
-            # -------------------------------------------------
-            # UPDATE INCIDENT
-            # -------------------------------------------------
+                if log_time <= existing_latest_failure:
+                    continue
 
-            active_incident.root_cause = (
-                incident_data["root_cause"]
-            )
-
-            active_incident.confidence = (
-                incident_data["confidence"]
-            )
-
-            active_incident.rca_score = (
-                incident_data["rca_score"]
-            )
-
-            active_incident.failure_count = (
-                incident_data["failure_count"]
-            )
-
-            active_incident.affected_services = (
-                incident_data["affected_services"]
-            )
-
-            active_incident.evidence = (
-                incident_data["evidence"]
-            )
-
-            active_incident.recommendations = (
-                incident_data["recommendations"]
-            )
-
-            active_incident.explanation = (
-                incident_data["explanation"]
-            )
-
-            # -------------------------------------------------
-            # NEW FAILURE EVENTS
-            # -------------------------------------------------
-
-            new_failure_logs = [
+            new_failure_logs.append(
                 log
-                for log in latest_failure_logs
-                if parse_timestamp(
-                    get_log_timestamp(log)
-                ) > existing_latest_failure
-            ]
-
-            create_failure_events(
-                db=db,
-                incident_id=(
-                    active_incident.incident_id
-                ),
-                logs=new_failure_logs
             )
 
-            # -------------------------------------------------
-            # RCA EVENT
-            # -------------------------------------------------
+        create_failure_events(
+            db=db,
+            incident_id=(
+                active_incident.incident_id
+            ),
+            logs=new_failure_logs
+        )
 
-            create_rca_event(
-                db=db,
-                incident_id=(
-                    active_incident.incident_id
-                ),
-                incident_data=incident_data,
-                timestamp=latest_failure_time
-            )
+        create_rca_event(
+            db=db,
+            incident_id=(
+                active_incident.incident_id
+            ),
+            incident_data=incident_data,
+            timestamp=trigger_time
+        )
 
-            db.commit()
+        db.commit()
 
-            db.refresh(
-                active_incident
-            )
+        db.refresh(
+            active_incident
+        )
 
-            return active_incident
+        return active_incident
 
     # =====================================================
     # CREATE NEW INCIDENT
-    #
-    # IMPORTANT:
-    # A NEW incident contains ONLY the incoming failure
-    # cluster, not unrelated services from the global window.
     # =====================================================
 
-    new_incident_logs = list(
-        latest_failure_logs
+    new_incident_logs = (
+        get_incident_window_logs(
+            logs=logs,
+            trigger_time=trigger_time,
+            affected_services={
+                trigger_service
+            }
+        )
     )
 
-    # -----------------------------------------------------
-    # BUILD RCA FOR NEW INCIDENT
-    # -----------------------------------------------------
+    # Always include the trigger.
+    if trigger_log not in new_incident_logs:
+
+        new_incident_logs.append(
+            trigger_log
+        )
+
+    new_incident_logs.sort(
+        key=lambda log: parse_timestamp(
+            get_log_timestamp(log)
+        )
+    )
 
     incident_data = build_incident_data(
         new_incident_logs
@@ -1003,10 +1083,6 @@ def get_or_create_incident(
 
     if not incident_data:
         return None
-
-    # -----------------------------------------------------
-    # GENERATE INCIDENT ID
-    # -----------------------------------------------------
 
     existing_count = (
         db.query(Incident).count()
@@ -1016,41 +1092,62 @@ def get_or_create_incident(
         f"INC-{existing_count + 1:03d}"
     )
 
-    # -----------------------------------------------------
-    # CREATE INCIDENT
-    # -----------------------------------------------------
-
     new_incident = Incident(
         incident_id=incident_id,
+
         title=(
             f"{incident_data['root_cause']} "
             f"Failure Detected"
         ),
+
         status="ACTIVE",
+
         severity="HIGH",
-        started_at=incident_data["started_at"],
+
+        started_at=(
+            incident_data["started_at"]
+        ),
+
         ended_at=None,
-        root_cause=incident_data["root_cause"],
-        confidence=incident_data["confidence"],
-        rca_score=incident_data["rca_score"],
-        failure_count=incident_data["failure_count"],
+
+        root_cause=(
+            incident_data["root_cause"]
+        ),
+
+        confidence=(
+            incident_data["confidence"]
+        ),
+
+        rca_score=(
+            incident_data["rca_score"]
+        ),
+
+        failure_count=(
+            incident_data["failure_count"]
+        ),
+
         affected_services=(
             incident_data["affected_services"]
         ),
-        evidence=incident_data["evidence"],
+
+        evidence=(
+            incident_data["evidence"]
+        ),
+
         recommendations=(
             incident_data["recommendations"]
         ),
-        explanation=incident_data["explanation"]
+
+        explanation=(
+            incident_data["explanation"]
+        )
     )
 
-    db.add(new_incident)
+    db.add(
+        new_incident
+    )
 
     db.flush()
-
-    # -----------------------------------------------------
-    # INCIDENT CREATED EVENT
-    # -----------------------------------------------------
 
     create_incident_event(
         db=db,
@@ -1064,30 +1161,18 @@ def get_or_create_incident(
         )
     )
 
-    # -----------------------------------------------------
-    # FAILURE EVENTS
-    # -----------------------------------------------------
-
     create_failure_events(
         db=db,
         incident_id=incident_id,
         logs=new_incident_logs
     )
 
-    # -----------------------------------------------------
-    # RCA EVENT
-    # -----------------------------------------------------
-
     create_rca_event(
         db=db,
         incident_id=incident_id,
         incident_data=incident_data,
-        timestamp=latest_failure_time
+        timestamp=trigger_time
     )
-
-    # -----------------------------------------------------
-    # SAVE
-    # -----------------------------------------------------
 
     db.commit()
 

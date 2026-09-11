@@ -17,9 +17,9 @@ from analysis.dependency_graph import (
 )
 
 
-# --------------------------------
-# General helpers
-# --------------------------------
+# =========================================================
+# GENERAL HELPERS
+# =========================================================
 
 def get_logs(db: Session):
     """
@@ -42,7 +42,9 @@ def build_temporal_analysis(logs):
 
     for log in logs:
 
-        level = log.level.upper().strip()
+        level = str(
+            log.level or ""
+        ).upper().strip()
 
         if level not in ("ERROR", "CRITICAL"):
             continue
@@ -95,6 +97,10 @@ def add_dependency_patterns(
 ):
     """
     Add dependency-only services to the candidate set.
+
+    Dependency-only services have no direct failures,
+    but can still become root-cause candidates because
+    other failing services depend on them.
     """
 
     for service in dependency_services:
@@ -166,32 +172,139 @@ def build_analysis_evidence(
     return evidence
 
 
-# --------------------------------
-# Core RCA analysis
-# --------------------------------
+# =========================================================
+# CANONICAL RCA NORMALIZATION
+# =========================================================
+
+def normalize_root_cause_explanation(
+    explanation,
+    candidates
+):
+    """
+    Normalize the RCA explanation so that the complete
+    analysis pipeline has one consistent root-cause result.
+
+    The candidate ranking is the authoritative source for
+    the RCA score.
+
+    The explanation engine provides the reasoning,
+    confidence, evidence, and recommendations.
+    """
+
+    explanation = explanation or {}
+
+    if not candidates:
+
+        return {
+            "root_cause": None,
+            "confidence": "low",
+            "reason": (
+                "No root-cause candidates were identified."
+            ),
+            "evidence": [],
+            "recommendations": [],
+            "rca_score": 0
+        }
+
+    best_candidate = candidates[0]
+
+    root_cause = explanation.get(
+        "root_cause"
+    )
+
+    if not root_cause:
+        root_cause = best_candidate.get(
+            "service"
+        )
+
+    confidence = explanation.get(
+        "confidence"
+    )
+
+    if not confidence:
+        confidence = "low"
+
+    reason = explanation.get(
+        "reason"
+    )
+
+    if not reason:
+        reason = (
+            f"{root_cause} is the strongest "
+            "root-cause candidate after combining "
+            "failure, temporal, correlation, and "
+            "dependency evidence."
+        )
+
+    evidence = explanation.get(
+        "evidence",
+        []
+    )
+
+    recommendations = explanation.get(
+        "recommendations",
+        []
+    )
+
+    # -----------------------------------------------------
+    # IMPORTANT:
+    # RCA score ALWAYS comes from the ranked candidate.
+    # -----------------------------------------------------
+
+    rca_score = best_candidate.get(
+        "score",
+        0
+    )
+
+    return {
+        "root_cause": root_cause,
+        "confidence": confidence,
+        "reason": reason,
+        "evidence": evidence,
+        "recommendations": recommendations,
+        "rca_score": rca_score
+    }
+
+
+# =========================================================
+# CORE RCA ANALYSIS
+# =========================================================
 
 def analyze_logs(logs):
     """
     Run the complete RootCauseAI analysis pipeline
     against the supplied logs.
 
-    This function is reusable for both:
+    This is the SINGLE SOURCE OF TRUTH for RCA.
+
+    Used by:
 
     1. Global analysis
     2. Incident-specific analysis
+    3. Incident creation/update
+    4. Frontend analysis
     """
 
-    # --------------------------------
+    # -----------------------------------------------------
+    # Ensure deterministic ordering
+    # -----------------------------------------------------
+
+    logs = sorted(
+        logs,
+        key=lambda log: log.timestamp
+    )
+
+    # -----------------------------------------------------
     # 1. Pattern analysis
-    # --------------------------------
+    # -----------------------------------------------------
 
     patterns = detect_error_patterns(
         logs
     )
 
-    # --------------------------------
+    # -----------------------------------------------------
     # 2. Temporal analysis
-    # --------------------------------
+    # -----------------------------------------------------
 
     (
         first_failures,
@@ -200,25 +313,25 @@ def analyze_logs(logs):
         logs
     )
 
-    # --------------------------------
+    # -----------------------------------------------------
     # 3. Message correlation
-    # --------------------------------
+    # -----------------------------------------------------
 
     correlations = correlate_messages(
         logs
     )
 
-    # --------------------------------
+    # -----------------------------------------------------
     # 4. Find failing services
-    # --------------------------------
+    # -----------------------------------------------------
 
     failing_services = set(
         patterns.keys()
     )
 
-    # --------------------------------
+    # -----------------------------------------------------
     # 5. Find dependency services
-    # --------------------------------
+    # -----------------------------------------------------
 
     dependency_services = (
         build_dependency_services(
@@ -226,18 +339,18 @@ def analyze_logs(logs):
         )
     )
 
-    # --------------------------------
+    # -----------------------------------------------------
     # 6. Complete candidate set
-    # --------------------------------
+    # -----------------------------------------------------
 
     all_candidate_services = (
         failing_services
         | dependency_services
     )
 
-    # --------------------------------
+    # -----------------------------------------------------
     # 7. Dependency scoring
-    # --------------------------------
+    # -----------------------------------------------------
 
     dependency_scores = (
         calculate_dependency_scores(
@@ -245,18 +358,18 @@ def analyze_logs(logs):
         )
     )
 
-    # --------------------------------
+    # -----------------------------------------------------
     # 8. Add dependency-only services
-    # --------------------------------
+    # -----------------------------------------------------
 
     add_dependency_patterns(
         patterns,
         dependency_services
     )
 
-    # --------------------------------
+    # -----------------------------------------------------
     # 9. Candidate ranking
-    # --------------------------------
+    # -----------------------------------------------------
 
     candidates = rank_candidates(
         patterns,
@@ -265,20 +378,33 @@ def analyze_logs(logs):
         dependency_scores
     )
 
-    # --------------------------------
+    # -----------------------------------------------------
     # 10. Root-cause explanation
-    # --------------------------------
+    # -----------------------------------------------------
 
-    root_cause_explanation = (
+    raw_explanation = (
         generate_root_cause_explanation(
             candidates,
             correlations
         )
     )
 
-    # --------------------------------
-    # 11. Evidence
-    # --------------------------------
+    # -----------------------------------------------------
+    # 11. Normalize RCA
+    #
+    # Candidate score is authoritative.
+    # -----------------------------------------------------
+
+    root_cause_explanation = (
+        normalize_root_cause_explanation(
+            raw_explanation,
+            candidates
+        )
+    )
+
+    # -----------------------------------------------------
+    # 12. Evidence
+    # -----------------------------------------------------
 
     evidence = build_analysis_evidence(
         patterns,
@@ -287,9 +413,9 @@ def analyze_logs(logs):
         dependency_scores
     )
 
-    # --------------------------------
-    # 12. Result
-    # --------------------------------
+    # -----------------------------------------------------
+    # 13. Result
+    # -----------------------------------------------------
 
     return {
         "patterns": patterns,
@@ -314,9 +440,9 @@ def analyze_logs(logs):
     }
 
 
-# --------------------------------
-# Incident-specific analysis
-# --------------------------------
+# =========================================================
+# INCIDENT-SPECIFIC ANALYSIS
+# =========================================================
 
 def analyze_incident(
     db: Session,
@@ -328,14 +454,13 @@ def analyze_incident(
     For an ACTIVE incident, the latest available telemetry
     timestamp is used as the analysis end time.
 
-    This makes the RCA deterministic and prevents problems
-    when simulated telemetry timestamps are ahead of the
-    machine's actual clock.
+    This keeps incident RCA deterministic when telemetry
+    timestamps are simulated or ahead of the machine clock.
     """
 
-    # --------------------------------
+    # -----------------------------------------------------
     # Find incident
-    # --------------------------------
+    # -----------------------------------------------------
 
     incident = (
         db.query(Incident)
@@ -348,9 +473,9 @@ def analyze_incident(
     if not incident:
         return None
 
-    # --------------------------------
+    # -----------------------------------------------------
     # Normalize incident start time
-    # --------------------------------
+    # -----------------------------------------------------
 
     start_time = incident.started_at
 
@@ -360,9 +485,9 @@ def analyze_incident(
             tzinfo=timezone.utc
         )
 
-    # --------------------------------
+    # -----------------------------------------------------
     # Determine affected services
-    # --------------------------------
+    # -----------------------------------------------------
 
     affected_services = (
         incident.affected_services
@@ -373,9 +498,9 @@ def analyze_incident(
         affected_services
     )
 
-    # --------------------------------
+    # -----------------------------------------------------
     # Determine analysis end time
-    # --------------------------------
+    # -----------------------------------------------------
 
     if incident.ended_at is not None:
 
@@ -388,13 +513,6 @@ def analyze_incident(
             )
 
     else:
-
-        # --------------------------------
-        # ACTIVE INCIDENT
-        # --------------------------------
-        # Use latest telemetry timestamp
-        # instead of machine current time.
-        # --------------------------------
 
         latest_query = (
             db.query(Log)
@@ -433,9 +551,9 @@ def analyze_incident(
                     tzinfo=timezone.utc
                 )
 
-    # --------------------------------
+    # -----------------------------------------------------
     # Query incident logs
-    # --------------------------------
+    # -----------------------------------------------------
 
     query = (
         db.query(Log)
@@ -445,9 +563,9 @@ def analyze_incident(
         )
     )
 
-    # --------------------------------
+    # -----------------------------------------------------
     # Filter by affected services
-    # --------------------------------
+    # -----------------------------------------------------
 
     if affected_services:
 
@@ -465,17 +583,17 @@ def analyze_incident(
         .all()
     )
 
-    # --------------------------------
-    # Run RCA
-    # --------------------------------
+    # -----------------------------------------------------
+    # Run canonical RCA
+    # -----------------------------------------------------
 
     analysis = analyze_logs(
         incident_logs
     )
 
-    # --------------------------------
+    # -----------------------------------------------------
     # Add incident metadata
-    # --------------------------------
+    # -----------------------------------------------------
 
     analysis["incident"] = {
         "incident_id": incident.incident_id,
@@ -496,9 +614,9 @@ def analyze_incident(
     return analysis
 
 
-# --------------------------------
-# Global analysis
-# --------------------------------
+# =========================================================
+# GLOBAL ANALYSIS
+# =========================================================
 
 def run_analysis():
     """
@@ -520,9 +638,9 @@ def run_analysis():
         db.close()
 
 
-# --------------------------------
-# Standalone execution
-# --------------------------------
+# =========================================================
+# STANDALONE EXECUTION
+# =========================================================
 
 if __name__ == "__main__":
 

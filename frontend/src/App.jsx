@@ -7,8 +7,12 @@ const API_URL = "http://127.0.0.1:8000";
 function App() {
   const [analysis, setAnalysis] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [incidents, setIncidents] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [incidentsLoading, setIncidentsLoading] = useState(false);
+
   const [error, setError] = useState("");
   const [activePage, setActivePage] = useState("Dashboard");
 
@@ -17,11 +21,21 @@ function App() {
   const [levelFilter, setLevelFilter] = useState("All");
 
   const [incidentSelected, setIncidentSelected] = useState(false);
+  const [selectedIncident, setSelectedIncident] = useState(null);
+
+  // =========================================================
+  // INITIAL DATA
+  // =========================================================
 
   useEffect(() => {
     fetchAnalysis();
     fetchLogs();
+    fetchIncidents();
   }, []);
+
+  // =========================================================
+  // FETCH ANALYSIS
+  // =========================================================
 
   const fetchAnalysis = async () => {
     try {
@@ -35,11 +49,17 @@ function App() {
       setAnalysis(response.data);
     } catch (err) {
       console.error(err);
-      setError("Unable to connect to RootCauseAI backend.");
+      setError(
+        "Unable to connect to RootCauseAI backend."
+      );
     } finally {
       setLoading(false);
     }
   };
+
+  // =========================================================
+  // FETCH LOGS
+  // =========================================================
 
   const fetchLogs = async () => {
     try {
@@ -57,16 +77,68 @@ function App() {
     }
   };
 
-  const refreshDashboard = async () => {
-    await fetchAnalysis();
-    await fetchLogs();
+  // =========================================================
+  // FETCH INCIDENTS
+  // =========================================================
+
+  const fetchIncidents = async () => {
+    try {
+      setIncidentsLoading(true);
+
+      const response = await axios.get(
+        `${API_URL}/api/incidents`
+      );
+
+      setIncidents(response.data);
+    } catch (err) {
+      console.error("Failed to fetch incidents:", err);
+    } finally {
+      setIncidentsLoading(false);
+    }
   };
+
+  // =========================================================
+  // FETCH SINGLE INCIDENT
+  // =========================================================
+
+  const fetchIncidentDetails = async (incidentId) => {
+    try {
+      const response = await axios.get(
+        `${API_URL}/api/incidents/${incidentId}`
+      );
+
+      setSelectedIncident(response.data);
+      setIncidentSelected(true);
+    } catch (err) {
+      console.error(
+        "Failed to fetch incident details:",
+        err
+      );
+    }
+  };
+
+  // =========================================================
+  // REFRESH
+  // =========================================================
+
+  const refreshDashboard = async () => {
+    await Promise.all([
+      fetchAnalysis(),
+      fetchLogs(),
+      fetchIncidents()
+    ]);
+  };
+
+  // =========================================================
+  // NAVIGATION
+  // =========================================================
 
   const handleNavigation = (page) => {
     setActivePage(page);
 
     if (page !== "Incidents") {
       setIncidentSelected(false);
+      setSelectedIncident(null);
     }
   };
 
@@ -74,76 +146,105 @@ function App() {
   // DERIVED DATA
   // =========================================================
 
-const patterns = analysis?.patterns || {};
+  const patterns = analysis?.patterns || {};
 
-const rawRootCause = analysis?.root_cause;
+  const rawRootCause = analysis?.root_cause;
 
-const rootCause =
-  typeof rawRootCause === "string"
-    ? {
-        root_cause: rawRootCause,
-        confidence: analysis?.confidence || "Unknown",
-        reason:
-          analysis?.reason ||
-          "No root-cause explanation is currently available.",
-        evidence: analysis?.evidence || [],
-        recommendations:
-          analysis?.recommendations || [],
-      }
-    : rawRootCause || {};
+  const rootCause =
+    typeof rawRootCause === "string"
+      ? {
+          root_cause: rawRootCause,
+          confidence:
+            analysis?.confidence || "Unknown",
+          reason:
+            analysis?.reason ||
+            "No root-cause explanation is currently available.",
+          evidence:
+            analysis?.evidence || [],
+          recommendations:
+            analysis?.recommendations || []
+        }
+      : rawRootCause || {};
 
-const correlations = analysis?.correlations || {};
-const candidates = analysis?.candidates || [];
-const temporalAnalysis =
-  analysis?.temporal_analysis || [];
+  const correlations =
+    analysis?.correlations || {};
+
+  const candidates =
+    analysis?.candidates || [];
+
+  const temporalAnalysis =
+    analysis?.temporal_analysis || [];
 
   const services = Object.keys(patterns);
 
-const totalFailures = Object.values(patterns).reduce(
-  (total, service) => {
+  const totalFailures = Object.values(
+    patterns
+  ).reduce((total, service) => {
     if (typeof service === "number") {
       return total + service;
     }
 
-    return total + (service?.total_failures || 0);
-  },
-  0
-);
+    return (
+      total +
+      (service?.total_failures || 0)
+    );
+  }, 0);
 
-const criticalEvents = Object.values(patterns).reduce(
-  (total, service) => {
+  const criticalEvents = Object.values(
+    patterns
+  ).reduce((total, service) => {
     if (typeof service === "number") {
       return total;
     }
 
-    return total + (service?.critical_count || 0);
-  },
-  0
-);
+    return (
+      total +
+      (service?.critical_count || 0)
+    );
+  }, 0);
 
- const failingServices = services.filter(
-  (service) =>
-    typeof patterns[service] === "number"
-      ? patterns[service] > 0
-      : (patterns[service]?.total_failures || 0) > 0
-);
+  const failingServices = services.filter(
+    (service) =>
+      typeof patterns[service] === "number"
+        ? patterns[service] > 0
+        : (
+            patterns[service]
+              ?.total_failures || 0
+          ) > 0
+  );
+
   const uniqueServices = useMemo(() => {
-    return [...new Set(logs.map((log) => log.service))];
+    return [
+      ...new Set(
+        logs.map((log) => log.service)
+      )
+    ];
   }, [logs]);
 
   const uniqueLevels = useMemo(() => {
-    return [...new Set(logs.map((log) => log.level))];
+    return [
+      ...new Set(
+        logs.map((log) => log.level)
+      )
+    ];
   }, [logs]);
 
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
-      const search = logSearch.toLowerCase();
+      const search =
+        logSearch.toLowerCase();
 
       const matchesSearch =
         !search ||
-        log.message?.toLowerCase().includes(search) ||
-        log.service?.toLowerCase().includes(search) ||
-        log.level?.toLowerCase().includes(search);
+        log.message
+          ?.toLowerCase()
+          .includes(search) ||
+        log.service
+          ?.toLowerCase()
+          .includes(search) ||
+        log.level
+          ?.toLowerCase()
+          .includes(search);
 
       const matchesService =
         serviceFilter === "All" ||
@@ -167,7 +268,8 @@ const criticalEvents = Object.values(patterns).reduce(
   ]);
 
   const getLevelClass = (level) => {
-    const normalized = String(level || "").toLowerCase();
+    const normalized =
+      String(level || "").toLowerCase();
 
     if (normalized === "critical") {
       return "level-critical";
@@ -188,7 +290,9 @@ const criticalEvents = Object.values(patterns).reduce(
   };
 
   const formatTimestamp = (timestamp) => {
-    if (!timestamp) return "Unknown";
+    if (!timestamp) {
+      return "Unknown";
+    }
 
     const date = new Date(timestamp);
 
@@ -248,12 +352,16 @@ const criticalEvents = Object.values(patterns).reduce(
 
         <div className="stat-card root-stat">
           <span>Root Cause</span>
+
           <strong>
-            {rootCause.root_cause || "Unknown"}
+            {rootCause.root_cause ||
+              "Unknown"}
           </strong>
 
           <small>
-            {rootCause.confidence || "Unknown"} confidence
+            {rootCause.confidence ||
+              "Unknown"}{" "}
+            confidence
           </small>
         </div>
       </section>
@@ -276,17 +384,23 @@ const criticalEvents = Object.values(patterns).reduce(
 
           <div className="services-grid">
             {services.map((service) => {
-              const serviceData = patterns[service];
+              const serviceData =
+                patterns[service];
+
               const failures =
-                serviceData?.total_failures || 0;
+                serviceData?.total_failures ||
+                0;
 
               const isRoot =
-                service === rootCause.root_cause;
+                service ===
+                rootCause.root_cause;
 
               return (
                 <div
                   className={`service-card ${
-                    isRoot ? "service-root" : ""
+                    isRoot
+                      ? "service-root"
+                      : ""
                   }`}
                   key={service}
                 >
@@ -298,7 +412,9 @@ const criticalEvents = Object.values(patterns).reduce(
                     </div>
 
                     <div>
-                      <strong>{service}</strong>
+                      <strong>
+                        {service}
+                      </strong>
 
                       <span>
                         {failures > 0
@@ -335,12 +451,14 @@ const criticalEvents = Object.values(patterns).reduce(
           <h2>Most likely root cause</h2>
 
           <div className="root-cause-name">
-            {rootCause.root_cause || "Unknown"}
+            {rootCause.root_cause ||
+              "Unknown"}
           </div>
 
           <div className="confidence-badge">
             Confidence:{" "}
-            {rootCause.confidence || "Unknown"}
+            {rootCause.confidence ||
+              "Unknown"}
           </div>
 
           <p className="root-cause-reason">
@@ -348,7 +466,8 @@ const criticalEvents = Object.values(patterns).reduce(
               "No root-cause explanation is currently available."}
           </p>
 
-          {rootCause.evidence?.length > 0 && (
+          {rootCause.evidence?.length >
+            0 && (
             <div className="evidence">
               <strong>Evidence</strong>
 
@@ -375,22 +494,30 @@ const criticalEvents = Object.values(patterns).reduce(
               ERROR CORRELATION
             </span>
 
-            <h2>Common Failure Patterns</h2>
+            <h2>
+              Common Failure Patterns
+            </h2>
           </div>
         </div>
 
         <div className="correlation-list">
-          {Object.entries(correlations).map(
+          {Object.entries(
+            correlations
+          ).map(
             ([keyword, data]) => (
               <div
                 className="correlation-item"
                 key={keyword}
               >
                 <div>
-                  <strong>{keyword}</strong>
+                  <strong>
+                    {keyword}
+                  </strong>
 
                   <span>
-                    {data.services?.join(", ") ||
+                    {data.services?.join(
+                      ", "
+                    ) ||
                       "Unknown services"}
                   </span>
                 </div>
@@ -421,7 +548,8 @@ const criticalEvents = Object.values(patterns).reduce(
         <div className="dependency-flow">
           <div className="dependency-root">
             <strong>
-              {rootCause.root_cause || "Unknown"}
+              {rootCause.root_cause ||
+                "Unknown"}
             </strong>
 
             <span>Root Cause</span>
@@ -432,20 +560,25 @@ const criticalEvents = Object.values(patterns).reduce(
           </div>
 
           <div className="dependency-services">
-            {failingServices.map((service) => (
-              <div
-                className="dependency-service"
-                key={service}
-              >
-                <strong>{service}</strong>
+            {failingServices.map(
+              (service) => (
+                <div
+                  className="dependency-service"
+                  key={service}
+                >
+                  <strong>
+                    {service}
+                  </strong>
 
-                <span>
-                  {patterns[service]
-                    ?.total_failures || 0}{" "}
-                  failures
-                </span>
-              </div>
-            ))}
+                  <span>
+                    {patterns[service]
+                      ?.total_failures ||
+                      0}{" "}
+                    failures
+                  </span>
+                </div>
+              )
+            )}
           </div>
         </div>
       </section>
@@ -477,7 +610,9 @@ const criticalEvents = Object.values(patterns).reduce(
                     )}
                   </span>
 
-                  <strong>{item.service}</strong>
+                  <strong>
+                    {item.service}
+                  </strong>
 
                   <p>
                     First detected failure
@@ -512,7 +647,8 @@ const criticalEvents = Object.values(patterns).reduce(
         </div>
       </section>
 
-      {rootCause.recommendations?.length > 0 && (
+      {rootCause.recommendations?.length >
+        0 && (
         <section className="recommendation">
           <div className="recommendation-icon">
             !
@@ -552,26 +688,33 @@ const criticalEvents = Object.values(patterns).reduce(
           <h1>Service Health</h1>
 
           <p>
-            Monitor service failures and RCA scores
+            Monitor service failures and RCA
+            scores
           </p>
         </div>
       </div>
 
       <section className="service-detail-grid">
         {services.map((service) => {
-          const data = patterns[service] || {};
+          const data =
+            patterns[service] || {};
 
-          const candidate = candidates.find(
-            (item) => item.service === service
-          );
+          const candidate =
+            candidates.find(
+              (item) =>
+                item.service === service
+            );
 
           const isRoot =
-            service === rootCause.root_cause;
+            service ===
+            rootCause.root_cause;
 
           return (
             <div
               className={`service-detail-card ${
-                isRoot ? "highlight-root" : ""
+                isRoot
+                  ? "highlight-root"
+                  : ""
               }`}
               key={service}
             >
@@ -588,7 +731,8 @@ const criticalEvents = Object.values(patterns).reduce(
                   <span>
                     {isRoot
                       ? "Most likely root cause"
-                      : data.total_failures > 0
+                      : data.total_failures >
+                        0
                       ? "Failure detected"
                       : "Upstream dependency"}
                   </span>
@@ -599,28 +743,32 @@ const criticalEvents = Object.values(patterns).reduce(
                 <div>
                   <span>Failures</span>
                   <strong>
-                    {data.total_failures || 0}
+                    {data.total_failures ||
+                      0}
                   </strong>
                 </div>
 
                 <div>
                   <span>Errors</span>
                   <strong>
-                    {data.error_count || 0}
+                    {data.error_count ||
+                      0}
                   </strong>
                 </div>
 
                 <div>
                   <span>Critical</span>
                   <strong>
-                    {data.critical_count || 0}
+                    {data.critical_count ||
+                      0}
                   </strong>
                 </div>
 
                 <div>
                   <span>RCA Score</span>
                   <strong>
-                    {candidate?.score || 0}
+                    {candidate?.score ||
+                      0}
                   </strong>
                 </div>
               </div>
@@ -646,75 +794,134 @@ const criticalEvents = Object.values(patterns).reduce(
           <h1>Incident Overview</h1>
 
           <p>
-            Failure events detected by RootCauseAI
+            Failure events detected by
+            RootCauseAI
           </p>
-        </div>
-      </div>
-
-      <section className="incident-list-card">
-        <div className="incident-list-header">
-          <div className="incident-status-dot" />
-
-          <div>
-            <span className="eyebrow">
-              ACTIVE INCIDENT
-            </span>
-
-            <h2>
-              Database Connectivity Failure
-            </h2>
-
-            <p>
-              RootCauseAI detected correlated
-              database connection failures across
-              multiple services.
-            </p>
-          </div>
-
-          <span className="incident-badge">
-            ACTIVE
-          </span>
-        </div>
-
-        <div className="incident-list-metrics">
-          <div>
-            <span>Root Cause</span>
-            <strong>
-              {rootCause.root_cause ||
-                "Unknown"}
-            </strong>
-          </div>
-
-          <div>
-            <span>Affected Services</span>
-            <strong>
-              {failingServices.length}
-            </strong>
-          </div>
-
-          <div>
-            <span>Failures</span>
-            <strong>{totalFailures}</strong>
-          </div>
-
-          <div>
-            <span>Confidence</span>
-            <strong>
-              {rootCause.confidence ||
-                "Unknown"}
-            </strong>
-          </div>
         </div>
 
         <button
-          className="incident-open-button"
-          onClick={() =>
-            setIncidentSelected(true)
-          }
+          className="refresh-button"
+          onClick={fetchIncidents}
+          disabled={incidentsLoading}
         >
-          View Incident Details →
+          {incidentsLoading
+            ? "Refreshing..."
+            : "↻ Refresh Incidents"}
         </button>
-      </section>
+      </div>
+
+      {incidentsLoading &&
+      incidents.length === 0 ? (
+        <section className="incident-list-card">
+          <div className="logs-empty">
+            <div className="mini-spinner" />
+            <p>
+              Loading incidents...
+            </p>
+          </div>
+        </section>
+      ) : incidents.length === 0 ? (
+        <section className="incident-list-card">
+          <div className="logs-empty">
+            <div className="empty-icon">
+              !
+            </div>
+
+            <h3>
+              No incidents found
+            </h3>
+
+            <p>
+              RootCauseAI has not detected any
+              persisted incidents yet.
+            </p>
+          </div>
+        </section>
+      ) : (
+        incidents.map((incident) => (
+          <section
+            className="incident-list-card"
+            key={incident.incident_id}
+          >
+            <div className="incident-list-header">
+              <div className="incident-status-dot" />
+
+              <div>
+                <span className="eyebrow">
+                  {incident.status ===
+                  "ACTIVE"
+                    ? "ACTIVE INCIDENT"
+                    : "INCIDENT"}
+                </span>
+
+                <h2>
+                  {incident.title}
+                </h2>
+
+                <p>
+                  {incident.explanation ||
+                    "RootCauseAI detected a software failure incident."}
+                </p>
+              </div>
+
+              <span className="incident-badge">
+                {incident.status}
+              </span>
+            </div>
+
+            <div className="incident-list-metrics">
+              <div>
+                <span>Incident ID</span>
+                <strong>
+                  {incident.incident_id}
+                </strong>
+              </div>
+
+              <div>
+                <span>Root Cause</span>
+                <strong>
+                  {incident.root_cause ||
+                    "Unknown"}
+                </strong>
+              </div>
+
+              <div>
+                <span>Affected Services</span>
+                <strong>
+                  {incident.affected_services
+                    ?.length || 0}
+                </strong>
+              </div>
+
+              <div>
+                <span>Failures</span>
+                <strong>
+                  {incident.failure_count}
+                </strong>
+              </div>
+
+              <div>
+                <span>Confidence</span>
+                <strong>
+                  {incident.confidence ||
+                    "Unknown"}
+                </strong>
+              </div>
+            </div>
+
+            <button
+              className="incident-open-button"
+              onClick={() =>
+                fetchIncidentDetails(
+                  incident.incident_id
+                )
+              }
+            >
+              View Incident Details →
+            </button>
+          </section>
+        ))
+      )}
     </>
   );
 
@@ -722,330 +929,447 @@ const criticalEvents = Object.values(patterns).reduce(
   // INCIDENT DETAILS
   // =========================================================
 
-  const renderIncidentDetails = () => (
-    <>
-      <div className="topbar">
-        <div>
-          <button
-            className="back-button"
-            onClick={() =>
-              setIncidentSelected(false)
-            }
-          >
-            ← Back to Incidents
-          </button>
+  const renderIncidentDetails = () => {
+    const incident =
+      selectedIncident;
 
-          <span className="eyebrow incident-eyebrow">
-            INCIDENT DETAILS
-          </span>
-
-          <h1>
-            Database Connectivity Failure
-          </h1>
-
-          <p>
-            RootCauseAI incident investigation
-          </p>
-        </div>
-
-        <div className="incident-detail-status">
-          <span className="incident-status-dot" />
-          ACTIVE
-        </div>
-      </div>
-
-      {/* Incident identity */}
-      <section className="incident-identity">
-        <div>
-          <span className="eyebrow">
-            INCIDENT ID
-          </span>
-
-          <strong>INC-001</strong>
-        </div>
-
-        <div>
-          <span className="eyebrow">
-            DETECTED FAILURES
-          </span>
-
-          <strong>{totalFailures}</strong>
-        </div>
-
-        <div>
-          <span className="eyebrow">
-            AFFECTED SERVICES
-          </span>
-
-          <strong>
-            {failingServices.length}
-          </strong>
-        </div>
-
-        <div>
-          <span className="eyebrow">
-            ROOT CAUSE
-          </span>
-
-          <strong>
-            {rootCause.root_cause ||
-              "Unknown"}
-          </strong>
-        </div>
-      </section>
-
-      <div className="incident-detail-grid">
-        {/* Root cause */}
-        <section className="panel incident-root-panel">
-          <span className="eyebrow">
-            ROOT CAUSE
-          </span>
-
-          <h2>
-            {rootCause.root_cause ||
-              "Unknown"}
-          </h2>
-
-          <span className="confidence-badge">
-            {rootCause.confidence ||
-              "Unknown"}{" "}
-            confidence
-          </span>
-
-          <p>
-            {rootCause.reason ||
-              "No root cause explanation available."}
-          </p>
-
-          <div className="incident-evidence">
-            <h3>Evidence</h3>
-
-            {rootCause.evidence?.map(
-              (item, index) => (
-                <div
-                  className="evidence-item"
-                  key={index}
-                >
-                  <span>✓</span>
-                  {item}
-                </div>
-              )
-            )}
-          </div>
-        </section>
-
-        {/* Impact */}
+    if (!incident) {
+      return (
         <section className="panel">
-          <span className="eyebrow">
-            IMPACT
-          </span>
-
-          <h2>Affected Services</h2>
-
-          <div className="impact-list">
-            {failingServices.map(
-              (service) => (
-                <div
-                  className="impact-row"
-                  key={service}
-                >
-                  <div className="impact-service">
-                    <div className="service-icon">
-                      {service
-                        .charAt(0)
-                        .toUpperCase()}
-                    </div>
-
-                    <strong>{service}</strong>
-                  </div>
-
-                  <span>
-                    {patterns[service]
-                      ?.total_failures || 0}{" "}
-                    failures
-                  </span>
-                </div>
-              )
-            )}
-          </div>
+          <p>
+            Loading incident details...
+          </p>
         </section>
-      </div>
+      );
+    }
 
-      {/* Timeline */}
-      <section className="panel">
-        <div className="panel-header">
+    const incidentServices =
+      incident.affected_services ||
+      [];
+
+    const incidentEvidence =
+      incident.evidence || [];
+
+    const incidentRecommendations =
+      incident.recommendations || [];
+
+    return (
+      <>
+        <div className="topbar">
           <div>
-            <span className="eyebrow">
-              TIMELINE
+            <button
+              className="back-button"
+              onClick={() => {
+                setIncidentSelected(
+                  false
+                );
+                setSelectedIncident(
+                  null
+                );
+              }}
+            >
+              ← Back to Incidents
+            </button>
+
+            <span className="eyebrow incident-eyebrow">
+              INCIDENT DETAILS
             </span>
 
-            <h2>Failure sequence</h2>
+            <h1>
+              {incident.title}
+            </h1>
+
+            <p>
+              RootCauseAI incident
+              investigation
+            </p>
+          </div>
+
+          <div className="incident-detail-status">
+            <span className="incident-status-dot" />
+
+            {incident.status}
           </div>
         </div>
 
-        <div className="timeline incident-timeline">
-          {temporalAnalysis.map(
-            (item, index) => (
-              <div
-                className="timeline-item"
-                key={index}
-              >
-                <div className="timeline-marker" />
+        {/* Incident identity */}
+        <section className="incident-identity">
+          <div>
+            <span className="eyebrow">
+              INCIDENT ID
+            </span>
 
-                <div className="timeline-content">
-                  <span className="timeline-time">
-                    {formatTimestamp(
-                      item.first_failure
-                    )}
-                  </span>
+            <strong>
+              {incident.incident_id}
+            </strong>
+          </div>
 
-                  <strong>
-                    {item.service}
-                  </strong>
+          <div>
+            <span className="eyebrow">
+              DETECTED FAILURES
+            </span>
 
-                  <p>
-                    First detected failure
-                  </p>
+            <strong>
+              {incident.failure_count}
+            </strong>
+          </div>
+
+          <div>
+            <span className="eyebrow">
+              AFFECTED SERVICES
+            </span>
+
+            <strong>
+              {incidentServices.length}
+            </strong>
+          </div>
+
+          <div>
+            <span className="eyebrow">
+              ROOT CAUSE
+            </span>
+
+            <strong>
+              {incident.root_cause ||
+                "Unknown"}
+            </strong>
+          </div>
+        </section>
+
+        {/* Additional incident metadata */}
+        <section className="incident-identity">
+          <div>
+            <span className="eyebrow">
+              SEVERITY
+            </span>
+
+            <strong>
+              {incident.severity ||
+                "Unknown"}
+            </strong>
+          </div>
+
+          <div>
+            <span className="eyebrow">
+              CONFIDENCE
+            </span>
+
+            <strong>
+              {incident.confidence ||
+                "Unknown"}
+            </strong>
+          </div>
+
+          <div>
+            <span className="eyebrow">
+              STARTED
+            </span>
+
+            <strong>
+              {formatTimestamp(
+                incident.started_at
+              )}
+            </strong>
+          </div>
+
+          <div>
+            <span className="eyebrow">
+              CREATED
+            </span>
+
+            <strong>
+              {formatTimestamp(
+                incident.created_at
+              )}
+            </strong>
+          </div>
+        </section>
+
+        <div className="incident-detail-grid">
+          {/* Root cause */}
+          <section className="panel incident-root-panel">
+            <span className="eyebrow">
+              ROOT CAUSE
+            </span>
+
+            <h2>
+              {incident.root_cause ||
+                "Unknown"}
+            </h2>
+
+            <span className="confidence-badge">
+              {incident.confidence ||
+                "Unknown"}{" "}
+              confidence
+            </span>
+
+            <p>
+              {incident.explanation ||
+                "No root cause explanation available."}
+            </p>
+
+            <div className="incident-evidence">
+              <h3>Evidence</h3>
+
+              {incidentEvidence.length >
+              0 ? (
+                incidentEvidence.map(
+                  (item, index) => (
+                    <div
+                      className="evidence-item"
+                      key={index}
+                    >
+                      <span>✓</span>
+                      {item}
+                    </div>
+                  )
+                )
+              ) : (
+                <p>
+                  No evidence available.
+                </p>
+              )}
+            </div>
+          </section>
+
+          {/* Impact */}
+          <section className="panel">
+            <span className="eyebrow">
+              IMPACT
+            </span>
+
+            <h2>
+              Affected Services
+            </h2>
+
+            <div className="impact-list">
+              {incidentServices.map(
+                (service) => {
+                  const serviceData =
+                    patterns[service];
+
+                  return (
+                    <div
+                      className="impact-row"
+                      key={service}
+                    >
+                      <div className="impact-service">
+                        <div className="service-icon">
+                          {service
+                            .charAt(0)
+                            .toUpperCase()}
+                        </div>
+
+                        <strong>
+                          {service}
+                        </strong>
+                      </div>
+
+                      <span>
+                        {serviceData
+                          ?.total_failures ||
+                          0}{" "}
+                        failures
+                      </span>
+                    </div>
+                  );
+                }
+              )}
+            </div>
+          </section>
+        </div>
+
+        {/* Timeline */}
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <span className="eyebrow">
+                TIMELINE
+              </span>
+
+              <h2>
+                Failure sequence
+              </h2>
+            </div>
+          </div>
+
+          <div className="timeline incident-timeline">
+            {temporalAnalysis.map(
+              (item, index) => (
+                <div
+                  className="timeline-item"
+                  key={index}
+                >
+                  <div className="timeline-marker" />
+
+                  <div className="timeline-content">
+                    <span className="timeline-time">
+                      {formatTimestamp(
+                        item.first_failure
+                      )}
+                    </span>
+
+                    <strong>
+                      {item.service}
+                    </strong>
+
+                    <p>
+                      First detected failure
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )
-          )}
+              )
+            )}
 
-          <div className="timeline-item root-timeline">
-            <div className="timeline-marker root-marker">
+            <div className="timeline-item root-timeline">
+              <div className="timeline-marker root-marker">
+                !
+              </div>
+
+              <div className="timeline-content">
+                <span className="timeline-time">
+                  RCA completed
+                </span>
+
+                <strong>
+                  {incident.root_cause ||
+                    "Unknown"}
+                </strong>
+
+                <p>
+                  Identified as the most
+                  likely upstream cause
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Correlations */}
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <span className="eyebrow">
+                CORRELATED SIGNALS
+              </span>
+
+              <h2>
+                Failure patterns
+              </h2>
+            </div>
+          </div>
+
+          <div className="correlation-list">
+            {Object.entries(
+              correlations
+            ).map(
+              ([keyword, data]) => (
+                <div
+                  className="correlation-item"
+                  key={keyword}
+                >
+                  <div>
+                    <strong>
+                      {keyword}
+                    </strong>
+
+                    <span>
+                      {data.services?.join(
+                        ", "
+                      ) ||
+                        "Unknown services"}
+                    </span>
+                  </div>
+
+                  <div className="correlation-count">
+                    {data.count}
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+        </section>
+
+        {/* Raw logs */}
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <span className="eyebrow">
+                INCIDENT LOGS
+              </span>
+
+              <h2>
+                Related telemetry
+              </h2>
+            </div>
+
+            <span className="panel-count">
+              {logs.length} logs
+            </span>
+          </div>
+
+          <div className="incident-log-list">
+            {logs.map((log) => (
+              <div
+                className="incident-log-row"
+                key={log.id}
+              >
+                <span className="incident-log-time">
+                  {formatTimestamp(
+                    log.timestamp
+                  )}
+                </span>
+
+                <span className="service-badge">
+                  {log.service}
+                </span>
+
+                <span
+                  className={`level-badge ${getLevelClass(
+                    log.level
+                  )}`}
+                >
+                  {log.level}
+                </span>
+
+                <span className="incident-log-message">
+                  {log.message}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Recommendation */}
+        {incidentRecommendations.length >
+          0 && (
+          <section className="recommendation">
+            <div className="recommendation-icon">
               !
             </div>
 
-            <div className="timeline-content">
-              <span className="timeline-time">
-                RCA completed
+            <div>
+              <span className="eyebrow">
+                RECOMMENDED ACTION
               </span>
 
-              <strong>
-                {rootCause.root_cause}
-              </strong>
+              <h3>
+                Investigate{" "}
+                {incident.root_cause ||
+                  "root cause"}
+              </h3>
 
               <p>
-                Identified as the most likely
-                upstream cause
+                {
+                  incidentRecommendations[0]
+                }
               </p>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Correlations */}
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <span className="eyebrow">
-              CORRELATED SIGNALS
-            </span>
-
-            <h2>Failure patterns</h2>
-          </div>
-        </div>
-
-        <div className="correlation-list">
-          {Object.entries(correlations).map(
-            ([keyword, data]) => (
-              <div
-                className="correlation-item"
-                key={keyword}
-              >
-                <div>
-                  <strong>{keyword}</strong>
-
-                  <span>
-                    {data.services?.join(
-                      ", "
-                    )}
-                  </span>
-                </div>
-
-                <div className="correlation-count">
-                  {data.count}
-                </div>
-              </div>
-            )
-          )}
-        </div>
-      </section>
-
-      {/* Raw logs */}
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <span className="eyebrow">
-              INCIDENT LOGS
-            </span>
-
-            <h2>Related telemetry</h2>
-          </div>
-
-          <span className="panel-count">
-            {logs.length} logs
-          </span>
-        </div>
-
-        <div className="incident-log-list">
-          {logs.map((log) => (
-            <div
-              className="incident-log-row"
-              key={log.id}
-            >
-              <span className="incident-log-time">
-                {formatTimestamp(
-                  log.timestamp
-                )}
-              </span>
-
-              <span className="service-badge">
-                {log.service}
-              </span>
-
-              <span
-                className={`level-badge ${getLevelClass(
-                  log.level
-                )}`}
-              >
-                {log.level}
-              </span>
-
-              <span className="incident-log-message">
-                {log.message}
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Recommendation */}
-      {rootCause.recommendations?.length >
-        0 && (
-        <section className="recommendation">
-          <div className="recommendation-icon">
-            !
-          </div>
-
-          <div>
-            <span className="eyebrow">
-              RECOMMENDED ACTION
-            </span>
-
-            <h3>
-              Investigate{" "}
-              {rootCause.root_cause}
-            </h3>
-
-            <p>
-              {rootCause.recommendations[0]}
-            </p>
-          </div>
-        </section>
-      )}
-    </>
-  );
+          </section>
+        )}
+      </>
+    );
+  };
 
   // =========================================================
   // LOGS
@@ -1062,7 +1386,8 @@ const criticalEvents = Object.values(patterns).reduce(
           <h1>System Logs</h1>
 
           <p>
-            Raw telemetry collected by RootCauseAI
+            Raw telemetry collected by
+            RootCauseAI
           </p>
         </div>
 
@@ -1087,7 +1412,9 @@ const criticalEvents = Object.values(patterns).reduce(
               placeholder="Search logs..."
               value={logSearch}
               onChange={(e) =>
-                setLogSearch(e.target.value)
+                setLogSearch(
+                  e.target.value
+                )
               }
             />
           </div>
@@ -1095,7 +1422,9 @@ const criticalEvents = Object.values(patterns).reduce(
           <select
             value={serviceFilter}
             onChange={(e) =>
-              setServiceFilter(e.target.value)
+              setServiceFilter(
+                e.target.value
+              )
             }
           >
             <option value="All">
@@ -1117,7 +1446,9 @@ const criticalEvents = Object.values(patterns).reduce(
           <select
             value={levelFilter}
             onChange={(e) =>
-              setLevelFilter(e.target.value)
+              setLevelFilter(
+                e.target.value
+              )
             }
           >
             <option value="All">
@@ -1144,7 +1475,9 @@ const criticalEvents = Object.values(patterns).reduce(
               {filteredLogs.length}
             </strong>{" "}
             of{" "}
-            <strong>{logs.length}</strong>{" "}
+            <strong>
+              {logs.length}
+            </strong>{" "}
             logs
           </span>
 
@@ -1155,8 +1488,12 @@ const criticalEvents = Object.values(patterns).reduce(
               className="clear-filters"
               onClick={() => {
                 setLogSearch("");
-                setServiceFilter("All");
-                setLevelFilter("All");
+                setServiceFilter(
+                  "All"
+                );
+                setLevelFilter(
+                  "All"
+                );
               }}
             >
               Clear filters
@@ -1167,19 +1504,25 @@ const criticalEvents = Object.values(patterns).reduce(
         {logsLoading ? (
           <div className="logs-empty">
             <div className="mini-spinner" />
-            <p>Loading telemetry...</p>
+
+            <p>
+              Loading telemetry...
+            </p>
           </div>
-        ) : filteredLogs.length === 0 ? (
+        ) : filteredLogs.length ===
+          0 ? (
           <div className="logs-empty">
             <div className="empty-icon">
               ⌁
             </div>
 
-            <h3>No logs found</h3>
+            <h3>
+              No logs found
+            </h3>
 
             <p>
-              Try changing your search or
-              filter settings.
+              Try changing your search
+              or filter settings.
             </p>
           </div>
         ) : (
@@ -1195,35 +1538,37 @@ const criticalEvents = Object.values(patterns).reduce(
               </thead>
 
               <tbody>
-                {filteredLogs.map((log) => (
-                  <tr key={log.id}>
-                    <td className="log-time">
-                      {formatTimestamp(
-                        log.timestamp
-                      )}
-                    </td>
+                {filteredLogs.map(
+                  (log) => (
+                    <tr key={log.id}>
+                      <td className="log-time">
+                        {formatTimestamp(
+                          log.timestamp
+                        )}
+                      </td>
 
-                    <td>
-                      <span className="service-badge">
-                        {log.service}
-                      </span>
-                    </td>
+                      <td>
+                        <span className="service-badge">
+                          {log.service}
+                        </span>
+                      </td>
 
-                    <td>
-                      <span
-                        className={`level-badge ${getLevelClass(
-                          log.level
-                        )}`}
-                      >
-                        {log.level}
-                      </span>
-                    </td>
+                      <td>
+                        <span
+                          className={`level-badge ${getLevelClass(
+                            log.level
+                          )}`}
+                        >
+                          {log.level}
+                        </span>
+                      </td>
 
-                    <td className="log-message">
-                      {log.message}
-                    </td>
-                  </tr>
-                ))}
+                      <td className="log-message">
+                        {log.message}
+                      </td>
+                    </tr>
+                  )
+                )}
               </tbody>
             </table>
           </div>
@@ -1244,11 +1589,13 @@ const criticalEvents = Object.values(patterns).reduce(
             ANALYSIS ENGINE
           </span>
 
-          <h1>Root Cause Analysis</h1>
+          <h1>
+            Root Cause Analysis
+          </h1>
 
           <p>
-            Evidence-based failure candidate
-            ranking
+            Evidence-based failure
+            candidate ranking
           </p>
         </div>
 
@@ -1300,7 +1647,9 @@ const criticalEvents = Object.values(patterns).reduce(
               )
             )
           ) : (
-            <p>No evidence available.</p>
+            <p>
+              No evidence available.
+            </p>
           )}
         </div>
       </section>
@@ -1344,28 +1693,36 @@ const criticalEvents = Object.values(patterns).reduce(
                   <span>
                     Failure{" "}
                     <strong>
-                      {candidate.failure_score}
+                      {
+                        candidate.failure_score
+                      }
                     </strong>
                   </span>
 
                   <span>
                     Temporal{" "}
                     <strong>
-                      {candidate.temporal_score}
+                      {
+                        candidate.temporal_score
+                      }
                     </strong>
                   </span>
 
                   <span>
                     Correlation{" "}
                     <strong>
-                      {candidate.correlation_score}
+                      {
+                        candidate.correlation_score
+                      }
                     </strong>
                   </span>
 
                   <span>
                     Dependency{" "}
                     <strong>
-                      {candidate.dependency_score}
+                      {
+                        candidate.dependency_score
+                      }
                     </strong>
                   </span>
                 </div>
@@ -1407,10 +1764,16 @@ const criticalEvents = Object.values(patterns).reduce(
     }
   };
 
+  // =========================================================
+  // LOADING SCREEN
+  // =========================================================
+
   if (loading && !analysis) {
     return (
       <div className="loading-screen">
-        <div className="loading-logo">R</div>
+        <div className="loading-logo">
+          R
+        </div>
 
         <h2>RootCauseAI</h2>
 
@@ -1421,12 +1784,20 @@ const criticalEvents = Object.values(patterns).reduce(
     );
   }
 
+  // =========================================================
+  // ERROR SCREEN
+  // =========================================================
+
   if (error && !analysis) {
     return (
       <div className="error-screen">
-        <div className="error-icon">!</div>
+        <div className="error-icon">
+          !
+        </div>
 
-        <h2>Backend unavailable</h2>
+        <h2>
+          Backend unavailable
+        </h2>
 
         <p>{error}</p>
 
@@ -1440,14 +1811,23 @@ const criticalEvents = Object.values(patterns).reduce(
     );
   }
 
+  // =========================================================
+  // APP
+  // =========================================================
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-logo">R</div>
+          <div className="brand-logo">
+            R
+          </div>
 
           <div>
-            <strong>RootCauseAI</strong>
+            <strong>
+              RootCauseAI
+            </strong>
+
             <span>
               System Intelligence
             </span>
@@ -1470,10 +1850,13 @@ const criticalEvents = Object.values(patterns).reduce(
                   : ""
               }
               onClick={() =>
-                handleNavigation(page)
+                handleNavigation(
+                  page
+                )
               }
             >
               <span className="nav-dot" />
+
               {page}
             </a>
           ))}

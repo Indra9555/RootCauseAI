@@ -5,7 +5,7 @@ from database.connection import Base, engine
 from database import models
 
 from api.routes.telemetry import router as telemetry_router
-#from api.routes.analysis import router as analysis_router
+from api.incidents.routes import router as incidents_router
 
 
 app = FastAPI(
@@ -13,6 +13,8 @@ app = FastAPI(
     description="AI-powered software failure root-cause analysis platform",
     version="0.1.0"
 )
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -41,5 +43,8 @@ def health_check():
     }
 
 
+# Existing telemetry API
 app.include_router(telemetry_router)
-#app.include_router(analysis_router)
+
+# Incident API
+app.include_router(incidents_router)

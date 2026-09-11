@@ -12,6 +12,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [logsLoading, setLogsLoading] = useState(false);
   const [incidentsLoading, setIncidentsLoading] = useState(false);
+  const [eventsLoading, setEventsLoading] = useState(false);
 
   const [error, setError] = useState("");
   const [activePage, setActivePage] = useState("Dashboard");
@@ -22,6 +23,7 @@ function App() {
 
   const [incidentSelected, setIncidentSelected] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState(null);
+  const [incidentEvents, setIncidentEvents] = useState([]);
 
   // =========================================================
   // INITIAL DATA
@@ -49,9 +51,7 @@ function App() {
       setAnalysis(response.data);
     } catch (err) {
       console.error(err);
-      setError(
-        "Unable to connect to RootCauseAI backend."
-      );
+      setError("Unable to connect to RootCauseAI backend.");
     } finally {
       setLoading(false);
     }
@@ -71,7 +71,7 @@ function App() {
 
       setLogs(response.data);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to fetch logs:", err);
     } finally {
       setLogsLoading(false);
     }
@@ -103,17 +103,36 @@ function App() {
 
   const fetchIncidentDetails = async (incidentId) => {
     try {
-      const response = await axios.get(
-        `${API_URL}/api/incidents/${incidentId}`
+      setEventsLoading(true);
+
+      const [incidentResponse, eventsResponse] =
+        await Promise.all([
+          axios.get(
+            `${API_URL}/api/incidents/${incidentId}`
+          ),
+          axios.get(
+            `${API_URL}/api/incidents/${incidentId}/events`
+          )
+        ]);
+
+      setSelectedIncident(incidentResponse.data);
+
+      setIncidentEvents(
+        [...eventsResponse.data].sort(
+          (a, b) =>
+            new Date(a.timestamp) -
+            new Date(b.timestamp)
+        )
       );
 
-      setSelectedIncident(response.data);
       setIncidentSelected(true);
     } catch (err) {
       console.error(
         "Failed to fetch incident details:",
         err
       );
+    } finally {
+      setEventsLoading(false);
     }
   };
 
@@ -139,6 +158,7 @@ function App() {
     if (page !== "Incidents") {
       setIncidentSelected(false);
       setSelectedIncident(null);
+      setIncidentEvents([]);
     }
   };
 
@@ -154,63 +174,56 @@ function App() {
     typeof rawRootCause === "string"
       ? {
           root_cause: rawRootCause,
-          confidence:
-            analysis?.confidence || "Unknown",
+          confidence: analysis?.confidence || "Unknown",
           reason:
             analysis?.reason ||
             "No root-cause explanation is currently available.",
-          evidence:
-            analysis?.evidence || [],
+          evidence: analysis?.evidence || [],
           recommendations:
             analysis?.recommendations || []
         }
       : rawRootCause || {};
 
-  const correlations =
-    analysis?.correlations || {};
-
-  const candidates =
-    analysis?.candidates || [];
-
+  const correlations = analysis?.correlations || {};
+  const candidates = analysis?.candidates || [];
   const temporalAnalysis =
     analysis?.temporal_analysis || [];
 
   const services = Object.keys(patterns);
 
-  const totalFailures = Object.values(
-    patterns
-  ).reduce((total, service) => {
-    if (typeof service === "number") {
-      return total + service;
-    }
+  const totalFailures = Object.values(patterns).reduce(
+    (total, service) => {
+      if (typeof service === "number") {
+        return total + service;
+      }
 
-    return (
-      total +
-      (service?.total_failures || 0)
-    );
-  }, 0);
+      return (
+        total +
+        (service?.total_failures || 0)
+      );
+    },
+    0
+  );
 
-  const criticalEvents = Object.values(
-    patterns
-  ).reduce((total, service) => {
-    if (typeof service === "number") {
-      return total;
-    }
+  const criticalEvents = Object.values(patterns).reduce(
+    (total, service) => {
+      if (typeof service === "number") {
+        return total;
+      }
 
-    return (
-      total +
-      (service?.critical_count || 0)
-    );
-  }, 0);
+      return (
+        total +
+        (service?.critical_count || 0)
+      );
+    },
+    0
+  );
 
   const failingServices = services.filter(
     (service) =>
       typeof patterns[service] === "number"
         ? patterns[service] > 0
-        : (
-            patterns[service]
-              ?.total_failures || 0
-          ) > 0
+        : (patterns[service]?.total_failures || 0) > 0
   );
 
   const uniqueServices = useMemo(() => {
@@ -231,8 +244,7 @@ function App() {
 
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
-      const search =
-        logSearch.toLowerCase();
+      const search = logSearch.toLowerCase();
 
       const matchesSearch =
         !search ||
@@ -267,6 +279,10 @@ function App() {
     levelFilter
   ]);
 
+  // =========================================================
+  // HELPERS
+  // =========================================================
+
   const getLevelClass = (level) => {
     const normalized =
       String(level || "").toLowerCase();
@@ -287,6 +303,53 @@ function App() {
     }
 
     return "level-info";
+  };
+
+  const getEventClass = (eventType) => {
+    switch (eventType) {
+      case "INCIDENT_CREATED":
+        return "event-created";
+
+      case "FAILURE_DETECTED":
+        return "event-failure";
+
+      case "RCA_UPDATED":
+        return "event-rca";
+
+      case "INCIDENT_RESOLVED":
+        return "event-resolved";
+
+      default:
+        return "event-default";
+    }
+  };
+
+  const getEventIcon = (eventType) => {
+    switch (eventType) {
+      case "INCIDENT_CREATED":
+        return "+";
+
+      case "FAILURE_DETECTED":
+        return "!";
+
+      case "RCA_UPDATED":
+        return "R";
+
+      case "INCIDENT_RESOLVED":
+        return "✓";
+
+      default:
+        return "•";
+    }
+  };
+
+  const formatEventType = (eventType) => {
+    return String(eventType || "")
+      .replaceAll("_", " ")
+      .toLowerCase()
+      .replace(/\b\w/g, (letter) =>
+        letter.toUpperCase()
+      );
   };
 
   const formatTimestamp = (timestamp) => {
@@ -354,14 +417,11 @@ function App() {
           <span>Root Cause</span>
 
           <strong>
-            {rootCause.root_cause ||
-              "Unknown"}
+            {rootCause.root_cause || "Unknown"}
           </strong>
 
           <small>
-            {rootCause.confidence ||
-              "Unknown"}{" "}
-            confidence
+            {rootCause.confidence || "Unknown"} confidence
           </small>
         </div>
       </section>
@@ -388,33 +448,25 @@ function App() {
                 patterns[service];
 
               const failures =
-                serviceData?.total_failures ||
-                0;
+                serviceData?.total_failures || 0;
 
               const isRoot =
-                service ===
-                rootCause.root_cause;
+                service === rootCause.root_cause;
 
               return (
                 <div
                   className={`service-card ${
-                    isRoot
-                      ? "service-root"
-                      : ""
+                    isRoot ? "service-root" : ""
                   }`}
                   key={service}
                 >
                   <div className="service-top">
                     <div className="service-icon">
-                      {service
-                        .charAt(0)
-                        .toUpperCase()}
+                      {service.charAt(0).toUpperCase()}
                     </div>
 
                     <div>
-                      <strong>
-                        {service}
-                      </strong>
+                      <strong>{service}</strong>
 
                       <span>
                         {failures > 0
@@ -451,14 +503,12 @@ function App() {
           <h2>Most likely root cause</h2>
 
           <div className="root-cause-name">
-            {rootCause.root_cause ||
-              "Unknown"}
+            {rootCause.root_cause || "Unknown"}
           </div>
 
           <div className="confidence-badge">
             Confidence:{" "}
-            {rootCause.confidence ||
-              "Unknown"}
+            {rootCause.confidence || "Unknown"}
           </div>
 
           <p className="root-cause-reason">
@@ -466,8 +516,7 @@ function App() {
               "No root-cause explanation is currently available."}
           </p>
 
-          {rootCause.evidence?.length >
-            0 && (
+          {rootCause.evidence?.length > 0 && (
             <div className="evidence">
               <strong>Evidence</strong>
 
@@ -494,30 +543,22 @@ function App() {
               ERROR CORRELATION
             </span>
 
-            <h2>
-              Common Failure Patterns
-            </h2>
+            <h2>Common Failure Patterns</h2>
           </div>
         </div>
 
         <div className="correlation-list">
-          {Object.entries(
-            correlations
-          ).map(
+          {Object.entries(correlations).map(
             ([keyword, data]) => (
               <div
                 className="correlation-item"
                 key={keyword}
               >
                 <div>
-                  <strong>
-                    {keyword}
-                  </strong>
+                  <strong>{keyword}</strong>
 
                   <span>
-                    {data.services?.join(
-                      ", "
-                    ) ||
+                    {data.services?.join(", ") ||
                       "Unknown services"}
                   </span>
                 </div>
@@ -548,8 +589,7 @@ function App() {
         <div className="dependency-flow">
           <div className="dependency-root">
             <strong>
-              {rootCause.root_cause ||
-                "Unknown"}
+              {rootCause.root_cause || "Unknown"}
             </strong>
 
             <span>Root Cause</span>
@@ -566,14 +606,11 @@ function App() {
                   className="dependency-service"
                   key={service}
                 >
-                  <strong>
-                    {service}
-                  </strong>
+                  <strong>{service}</strong>
 
                   <span>
                     {patterns[service]
-                      ?.total_failures ||
-                      0}{" "}
+                      ?.total_failures || 0}{" "}
                     failures
                   </span>
                 </div>
@@ -647,8 +684,7 @@ function App() {
         </div>
       </section>
 
-      {rootCause.recommendations?.length >
-        0 && (
+      {rootCause.recommendations?.length > 0 && (
         <section className="recommendation">
           <div className="recommendation-icon">
             !
@@ -688,41 +724,33 @@ function App() {
           <h1>Service Health</h1>
 
           <p>
-            Monitor service failures and RCA
-            scores
+            Monitor service failures and RCA scores
           </p>
         </div>
       </div>
 
       <section className="service-detail-grid">
         {services.map((service) => {
-          const data =
-            patterns[service] || {};
+          const data = patterns[service] || {};
 
-          const candidate =
-            candidates.find(
-              (item) =>
-                item.service === service
-            );
+          const candidate = candidates.find(
+            (item) =>
+              item.service === service
+          );
 
           const isRoot =
-            service ===
-            rootCause.root_cause;
+            service === rootCause.root_cause;
 
           return (
             <div
               className={`service-detail-card ${
-                isRoot
-                  ? "highlight-root"
-                  : ""
+                isRoot ? "highlight-root" : ""
               }`}
               key={service}
             >
               <div className="service-detail-header">
                 <div className="service-icon large">
-                  {service
-                    .charAt(0)
-                    .toUpperCase()}
+                  {service.charAt(0).toUpperCase()}
                 </div>
 
                 <div>
@@ -731,8 +759,7 @@ function App() {
                   <span>
                     {isRoot
                       ? "Most likely root cause"
-                      : data.total_failures >
-                        0
+                      : data.total_failures > 0
                       ? "Failure detected"
                       : "Upstream dependency"}
                   </span>
@@ -742,33 +769,33 @@ function App() {
               <div className="service-metrics">
                 <div>
                   <span>Failures</span>
+
                   <strong>
-                    {data.total_failures ||
-                      0}
+                    {data.total_failures || 0}
                   </strong>
                 </div>
 
                 <div>
                   <span>Errors</span>
+
                   <strong>
-                    {data.error_count ||
-                      0}
+                    {data.error_count || 0}
                   </strong>
                 </div>
 
                 <div>
                   <span>Critical</span>
+
                   <strong>
-                    {data.critical_count ||
-                      0}
+                    {data.critical_count || 0}
                   </strong>
                 </div>
 
                 <div>
                   <span>RCA Score</span>
+
                   <strong>
-                    {candidate?.score ||
-                      0}
+                    {candidate?.score || 0}
                   </strong>
                 </div>
               </div>
@@ -794,8 +821,7 @@ function App() {
           <h1>Incident Overview</h1>
 
           <p>
-            Failure events detected by
-            RootCauseAI
+            Failure events detected by RootCauseAI
           </p>
         </div>
 
@@ -815,9 +841,8 @@ function App() {
         <section className="incident-list-card">
           <div className="logs-empty">
             <div className="mini-spinner" />
-            <p>
-              Loading incidents...
-            </p>
+
+            <p>Loading incidents...</p>
           </div>
         </section>
       ) : incidents.length === 0 ? (
@@ -827,9 +852,7 @@ function App() {
               !
             </div>
 
-            <h3>
-              No incidents found
-            </h3>
+            <h3>No incidents found</h3>
 
             <p>
               RootCauseAI has not detected any
@@ -848,15 +871,12 @@ function App() {
 
               <div>
                 <span className="eyebrow">
-                  {incident.status ===
-                  "ACTIVE"
+                  {incident.status === "ACTIVE"
                     ? "ACTIVE INCIDENT"
                     : "INCIDENT"}
                 </span>
 
-                <h2>
-                  {incident.title}
-                </h2>
+                <h2>{incident.title}</h2>
 
                 <p>
                   {incident.explanation ||
@@ -872,6 +892,7 @@ function App() {
             <div className="incident-list-metrics">
               <div>
                 <span>Incident ID</span>
+
                 <strong>
                   {incident.incident_id}
                 </strong>
@@ -879,14 +900,15 @@ function App() {
 
               <div>
                 <span>Root Cause</span>
+
                 <strong>
-                  {incident.root_cause ||
-                    "Unknown"}
+                  {incident.root_cause || "Unknown"}
                 </strong>
               </div>
 
               <div>
                 <span>Affected Services</span>
+
                 <strong>
                   {incident.affected_services
                     ?.length || 0}
@@ -895,6 +917,7 @@ function App() {
 
               <div>
                 <span>Failures</span>
+
                 <strong>
                   {incident.failure_count}
                 </strong>
@@ -902,9 +925,9 @@ function App() {
 
               <div>
                 <span>Confidence</span>
+
                 <strong>
-                  {incident.confidence ||
-                    "Unknown"}
+                  {incident.confidence || "Unknown"}
                 </strong>
               </div>
             </div>
@@ -930,8 +953,7 @@ function App() {
   // =========================================================
 
   const renderIncidentDetails = () => {
-    const incident =
-      selectedIncident;
+    const incident = selectedIncident;
 
     if (!incident) {
       return (
@@ -944,14 +966,21 @@ function App() {
     }
 
     const incidentServices =
-      incident.affected_services ||
-      [];
+      incident.affected_services || [];
 
     const incidentEvidence =
       incident.evidence || [];
 
     const incidentRecommendations =
       incident.recommendations || [];
+
+    const incidentServiceSet =
+      new Set(incidentServices);
+
+    const incidentLogs = logs.filter(
+      (log) =>
+        incidentServiceSet.has(log.service)
+    );
 
     return (
       <>
@@ -960,12 +989,9 @@ function App() {
             <button
               className="back-button"
               onClick={() => {
-                setIncidentSelected(
-                  false
-                );
-                setSelectedIncident(
-                  null
-                );
+                setIncidentSelected(false);
+                setSelectedIncident(null);
+                setIncidentEvents([]);
               }}
             >
               ← Back to Incidents
@@ -975,13 +1001,10 @@ function App() {
               INCIDENT DETAILS
             </span>
 
-            <h1>
-              {incident.title}
-            </h1>
+            <h1>{incident.title}</h1>
 
             <p>
-              RootCauseAI incident
-              investigation
+              RootCauseAI incident investigation
             </p>
           </div>
 
@@ -993,6 +1016,7 @@ function App() {
         </div>
 
         {/* Incident identity */}
+
         <section className="incident-identity">
           <div>
             <span className="eyebrow">
@@ -1030,13 +1054,13 @@ function App() {
             </span>
 
             <strong>
-              {incident.root_cause ||
-                "Unknown"}
+              {incident.root_cause || "Unknown"}
             </strong>
           </div>
         </section>
 
         {/* Additional incident metadata */}
+
         <section className="incident-identity">
           <div>
             <span className="eyebrow">
@@ -1044,8 +1068,17 @@ function App() {
             </span>
 
             <strong>
-              {incident.severity ||
-                "Unknown"}
+              {incident.severity || "Unknown"}
+            </strong>
+          </div>
+
+          <div>
+            <span className="eyebrow">
+              RCA SCORE
+            </span>
+
+            <strong>
+              {incident.rca_score ?? 0}
             </strong>
           </div>
 
@@ -1055,8 +1088,7 @@ function App() {
             </span>
 
             <strong>
-              {incident.confidence ||
-                "Unknown"}
+              {incident.confidence || "Unknown"}
             </strong>
           </div>
 
@@ -1071,35 +1103,22 @@ function App() {
               )}
             </strong>
           </div>
-
-          <div>
-            <span className="eyebrow">
-              CREATED
-            </span>
-
-            <strong>
-              {formatTimestamp(
-                incident.created_at
-              )}
-            </strong>
-          </div>
         </section>
 
         <div className="incident-detail-grid">
           {/* Root cause */}
+
           <section className="panel incident-root-panel">
             <span className="eyebrow">
               ROOT CAUSE
             </span>
 
             <h2>
-              {incident.root_cause ||
-                "Unknown"}
+              {incident.root_cause || "Unknown"}
             </h2>
 
             <span className="confidence-badge">
-              {incident.confidence ||
-                "Unknown"}{" "}
+              {incident.confidence || "Unknown"}{" "}
               confidence
             </span>
 
@@ -1111,8 +1130,7 @@ function App() {
             <div className="incident-evidence">
               <h3>Evidence</h3>
 
-              {incidentEvidence.length >
-              0 ? (
+              {incidentEvidence.length > 0 ? (
                 incidentEvidence.map(
                   (item, index) => (
                     <div
@@ -1133,14 +1151,13 @@ function App() {
           </section>
 
           {/* Impact */}
+
           <section className="panel">
             <span className="eyebrow">
               IMPACT
             </span>
 
-            <h2>
-              Affected Services
-            </h2>
+            <h2>Affected Services</h2>
 
             <div className="impact-list">
               {incidentServices.map(
@@ -1179,73 +1196,112 @@ function App() {
           </section>
         </div>
 
-        {/* Timeline */}
+        {/* =====================================================
+            REAL INCIDENT EVENT TIMELINE
+           ===================================================== */}
+
         <section className="panel">
           <div className="panel-header">
             <div>
               <span className="eyebrow">
-                TIMELINE
+                INCIDENT TIMELINE
               </span>
 
               <h2>
-                Failure sequence
+                Incident event history
               </h2>
             </div>
+
+            <span className="panel-count">
+              {incidentEvents.length} events
+            </span>
           </div>
 
-          <div className="timeline incident-timeline">
-            {temporalAnalysis.map(
-              (item, index) => (
-                <div
-                  className="timeline-item"
-                  key={index}
-                >
-                  <div className="timeline-marker" />
+          {eventsLoading ? (
+            <div className="logs-empty">
+              <div className="mini-spinner" />
 
-                  <div className="timeline-content">
-                    <span className="timeline-time">
-                      {formatTimestamp(
-                        item.first_failure
-                      )}
-                    </span>
-
-                    <strong>
-                      {item.service}
-                    </strong>
-
-                    <p>
-                      First detected failure
-                    </p>
-                  </div>
-                </div>
-              )
-            )}
-
-            <div className="timeline-item root-timeline">
-              <div className="timeline-marker root-marker">
-                !
-              </div>
-
-              <div className="timeline-content">
-                <span className="timeline-time">
-                  RCA completed
-                </span>
-
-                <strong>
-                  {incident.root_cause ||
-                    "Unknown"}
-                </strong>
-
-                <p>
-                  Identified as the most
-                  likely upstream cause
-                </p>
-              </div>
+              <p>
+                Loading incident events...
+              </p>
             </div>
-          </div>
+          ) : incidentEvents.length === 0 ? (
+            <div className="logs-empty">
+              <div className="empty-icon">
+                ⌁
+              </div>
+
+              <h3>
+                No incident events
+              </h3>
+
+              <p>
+                No persisted events were recorded
+                for this incident.
+              </p>
+            </div>
+          ) : (
+            <div className="incident-event-timeline">
+              {incidentEvents.map(
+                (event) => (
+                  <div
+                    className="incident-event-row"
+                    key={event.id}
+                  >
+                    <div
+                      className={`incident-event-marker ${getEventClass(
+                        event.event_type
+                      )}`}
+                    >
+                      {getEventIcon(
+                        event.event_type
+                      )}
+                    </div>
+
+                    <div className="incident-event-line" />
+
+                    <div className="incident-event-content">
+                      <div className="incident-event-header">
+                        <div>
+                          <span
+                            className={`event-type-badge ${getEventClass(
+                              event.event_type
+                            )}`}
+                          >
+                            {formatEventType(
+                              event.event_type
+                            )}
+                          </span>
+
+                          {event.service && (
+                            <span className="service-badge">
+                              {event.service}
+                            </span>
+                          )}
+                        </div>
+
+                        <span className="timeline-time">
+                          {formatTimestamp(
+                            event.timestamp
+                          )}
+                        </span>
+                      </div>
+
+                      {event.message && (
+                        <p>
+                          {event.message}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          )}
         </section>
 
         {/* Correlations */}
+
         <section className="panel">
           <div className="panel-header">
             <div>
@@ -1253,9 +1309,7 @@ function App() {
                 CORRELATED SIGNALS
               </span>
 
-              <h2>
-                Failure patterns
-              </h2>
+              <h2>Failure patterns</h2>
             </div>
           </div>
 
@@ -1290,7 +1344,8 @@ function App() {
           </div>
         </section>
 
-        {/* Raw logs */}
+        {/* Incident Logs */}
+
         <section className="panel">
           <div className="panel-header">
             <div>
@@ -1304,43 +1359,55 @@ function App() {
             </div>
 
             <span className="panel-count">
-              {logs.length} logs
+              {incidentLogs.length} logs
             </span>
           </div>
 
-          <div className="incident-log-list">
-            {logs.map((log) => (
-              <div
-                className="incident-log-row"
-                key={log.id}
-              >
-                <span className="incident-log-time">
-                  {formatTimestamp(
-                    log.timestamp
-                  )}
-                </span>
+          {incidentLogs.length === 0 ? (
+            <div className="logs-empty">
+              <p>
+                No telemetry found for the
+                affected services.
+              </p>
+            </div>
+          ) : (
+            <div className="incident-log-list">
+              {incidentLogs.map(
+                (log) => (
+                  <div
+                    className="incident-log-row"
+                    key={log.id}
+                  >
+                    <span className="incident-log-time">
+                      {formatTimestamp(
+                        log.timestamp
+                      )}
+                    </span>
 
-                <span className="service-badge">
-                  {log.service}
-                </span>
+                    <span className="service-badge">
+                      {log.service}
+                    </span>
 
-                <span
-                  className={`level-badge ${getLevelClass(
-                    log.level
-                  )}`}
-                >
-                  {log.level}
-                </span>
+                    <span
+                      className={`level-badge ${getLevelClass(
+                        log.level
+                      )}`}
+                    >
+                      {log.level}
+                    </span>
 
-                <span className="incident-log-message">
-                  {log.message}
-                </span>
-              </div>
-            ))}
-          </div>
+                    <span className="incident-log-message">
+                      {log.message}
+                    </span>
+                  </div>
+                )
+              )}
+            </div>
+          )}
         </section>
 
         {/* Recommendation */}
+
         {incidentRecommendations.length >
           0 && (
           <section className="recommendation">
@@ -1386,8 +1453,7 @@ function App() {
           <h1>System Logs</h1>
 
           <p>
-            Raw telemetry collected by
-            RootCauseAI
+            Raw telemetry collected by RootCauseAI
           </p>
         </div>
 
@@ -1488,12 +1554,8 @@ function App() {
               className="clear-filters"
               onClick={() => {
                 setLogSearch("");
-                setServiceFilter(
-                  "All"
-                );
-                setLevelFilter(
-                  "All"
-                );
+                setServiceFilter("All");
+                setLevelFilter("All");
               }}
             >
               Clear filters
@@ -1505,24 +1567,19 @@ function App() {
           <div className="logs-empty">
             <div className="mini-spinner" />
 
-            <p>
-              Loading telemetry...
-            </p>
+            <p>Loading telemetry...</p>
           </div>
-        ) : filteredLogs.length ===
-          0 ? (
+        ) : filteredLogs.length === 0 ? (
           <div className="logs-empty">
             <div className="empty-icon">
               ⌁
             </div>
 
-            <h3>
-              No logs found
-            </h3>
+            <h3>No logs found</h3>
 
             <p>
-              Try changing your search
-              or filter settings.
+              Try changing your search or
+              filter settings.
             </p>
           </div>
         ) : (
@@ -1594,8 +1651,8 @@ function App() {
           </h1>
 
           <p>
-            Evidence-based failure
-            candidate ranking
+            Evidence-based failure candidate
+            ranking
           </p>
         </div>
 
@@ -1615,13 +1672,11 @@ function App() {
           </span>
 
           <h2>
-            {rootCause.root_cause ||
-              "Unknown"}
+            {rootCause.root_cause || "Unknown"}
           </h2>
 
           <span className="confidence-badge">
-            {rootCause.confidence ||
-              "Unknown"}{" "}
+            {rootCause.confidence || "Unknown"}{" "}
             confidence
           </span>
 
@@ -1647,9 +1702,7 @@ function App() {
               )
             )
           ) : (
-            <p>
-              No evidence available.
-            </p>
+            <p>No evidence available.</p>
           )}
         </div>
       </section>
@@ -1693,36 +1746,28 @@ function App() {
                   <span>
                     Failure{" "}
                     <strong>
-                      {
-                        candidate.failure_score
-                      }
+                      {candidate.failure_score}
                     </strong>
                   </span>
 
                   <span>
                     Temporal{" "}
                     <strong>
-                      {
-                        candidate.temporal_score
-                      }
+                      {candidate.temporal_score}
                     </strong>
                   </span>
 
                   <span>
                     Correlation{" "}
                     <strong>
-                      {
-                        candidate.correlation_score
-                      }
+                      {candidate.correlation_score}
                     </strong>
                   </span>
 
                   <span>
                     Dependency{" "}
                     <strong>
-                      {
-                        candidate.dependency_score
-                      }
+                      {candidate.dependency_score}
                     </strong>
                   </span>
                 </div>
@@ -1850,9 +1895,7 @@ function App() {
                   : ""
               }
               onClick={() =>
-                handleNavigation(
-                  page
-                )
+                handleNavigation(page)
               }
             >
               <span className="nav-dot" />

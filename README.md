@@ -2739,7 +2739,7 @@ The long-term goal is to evolve RootCauseAI into a more complete intelligent obs
 | Property | Details |
 |---|---|
 | Project Name | RootCauseAI |
-| Project Type | Final-Year CSE Project |
+| Project Type | Full-Stack Software Engineering Project |
 | Category | Software Observability / Root-Cause Analysis |
 | Architecture | Full-Stack Web Application |
 | Frontend | React + Vite |

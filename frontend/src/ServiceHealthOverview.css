@@ -1,0 +1,422 @@
+.service-health-overview {
+  margin-bottom: 18px;
+  padding: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 18px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(15, 23, 42, 0.94),
+      rgba(9, 14, 27, 0.96)
+    );
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.16);
+}
+
+.service-health-overview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 17px;
+  border-bottom: 1px solid
+    rgba(148, 163, 184, 0.08);
+}
+
+.service-health-eyebrow {
+  display: inline-block;
+  margin-bottom: 5px;
+  color: #60a5fa;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+}
+
+.service-health-overview-header h2 {
+  margin: 0;
+  color: #f1f5f9;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.service-health-overview-header p {
+  margin: 5px 0 0;
+  color: #64748b;
+  font-size: 10px;
+}
+
+.service-health-view-all {
+  padding: 8px 11px;
+  border: 1px solid rgba(96, 165, 250, 0.16);
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.05);
+  color: #93c5fd;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.service-health-view-all:hover {
+  border-color: rgba(96, 165, 250, 0.32);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.service-health-layout {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.service-health-summary,
+.service-risk-panel {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  border-radius: 13px;
+  background: rgba(2, 6, 23, 0.28);
+}
+
+.health-score {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.health-score-ring {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  border: 5px solid rgba(34, 197, 94, 0.18);
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.035);
+  box-shadow:
+    inset 0 0 20px rgba(34, 197, 94, 0.03);
+}
+
+.health-score-ring strong {
+  color: #4ade80;
+  font-size: 17px;
+}
+
+.health-score-ring span {
+  margin-top: 1px;
+  color: #64748b;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.health-score-copy {
+  min-width: 0;
+}
+
+.health-score-copy > span {
+  display: block;
+  margin-bottom: 4px;
+  color: #475569;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.health-score-copy strong {
+  display: block;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.health-score-copy small {
+  display: block;
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.health-distribution {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 17px;
+}
+
+.health-distribution-row {
+  padding: 8px;
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.health-distribution-row span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #64748b;
+  font-size: 8px;
+}
+
+.health-distribution-row strong {
+  display: block;
+  margin-top: 4px;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.health-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.health-dot.healthy {
+  background: #22c55e;
+}
+
+.health-dot.degraded {
+  background: #f59e0b;
+}
+
+.health-dot.critical {
+  background: #ef4444;
+}
+
+.health-distribution-bar {
+  display: flex;
+  width: 100%;
+  height: 4px;
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: rgba(71, 85, 105, 0.18);
+}
+
+.distribution-segment {
+  display: block;
+  height: 100%;
+}
+
+.distribution-segment.healthy {
+  background: #22c55e;
+}
+
+.distribution-segment.degraded {
+  background: #f59e0b;
+}
+
+.distribution-segment.critical {
+  background: #ef4444;
+}
+
+.service-risk-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.service-risk-header > div > span {
+  display: block;
+  margin-bottom: 4px;
+  color: #475569;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.service-risk-header h3 {
+  margin: 0;
+  color: #e2e8f0;
+  font-size: 13px;
+}
+
+.service-risk-count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.08);
+  color: #f87171;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.service-risk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.service-risk-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 9px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.48);
+  text-align: left;
+  cursor: pointer;
+  transition: 150ms ease;
+}
+
+.service-risk-row:hover {
+  border-color: rgba(96, 165, 250, 0.14);
+  background: rgba(30, 41, 59, 0.55);
+}
+
+.service-risk-root {
+  border-color: rgba(168, 85, 247, 0.12);
+}
+
+.service-risk-icon {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 27px;
+  height: 27px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 7px;
+  background: rgba(30, 41, 59, 0.65);
+  color: #94a3b8;
+  font-size: 8px;
+  font-weight: 800;
+  font-family: monospace;
+}
+
+.service-risk-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.service-risk-info > div {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.service-risk-info strong {
+  overflow: hidden;
+  color: #cbd5e1;
+  font-size: 9px;
+  font-family: monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.service-risk-info small {
+  display: block;
+  margin-top: 3px;
+  color: #475569;
+  font-size: 8px;
+}
+
+.service-root-badge,
+.service-incident-badge {
+  flex: 0 0 auto;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 6px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.service-root-badge {
+  background: rgba(168, 85, 247, 0.1);
+  color: #c084fc;
+}
+
+.service-incident-badge {
+  background: rgba(239, 68, 68, 0.08);
+  color: #f87171;
+}
+
+.service-risk-health {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  font-size: 7px;
+  font-weight: 800;
+}
+
+.service-risk-health i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.service-risk-health.healthy {
+  color: #4ade80;
+}
+
+.service-risk-health.healthy i {
+  background: #22c55e;
+}
+
+.service-risk-health.degraded {
+  color: #fbbf24;
+}
+
+.service-risk-health.degraded i {
+  background: #f59e0b;
+}
+
+.service-risk-health.critical {
+  color: #f87171;
+}
+
+.service-risk-health.critical i {
+  background: #ef4444;
+}
+
+.service-risk-arrow {
+  color: #475569;
+  font-size: 11px;
+}
+
+.service-health-empty {
+  padding: 20px 0;
+  color: #475569;
+  font-size: 9px;
+  text-align: center;
+}
+
+@media (max-width: 850px) {
+  .service-health-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .service-health-overview {
+    padding: 16px;
+  }
+
+  .service-health-overview-header {
+    flex-direction: column;
+  }
+
+  .service-health-view-all {
+    align-self: flex-start;
+  }
+
+  .health-distribution {
+    grid-template-columns: 1fr;
+  }
+
+  .service-risk-health {
+    display: none;
+  }
+}

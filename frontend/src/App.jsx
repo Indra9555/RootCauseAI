@@ -11,6 +11,11 @@ import "./ServiceDrilldown.css";
 import "./IncidentCorrelation.css";
 import DependencyGraph from "./DependencyGraph";
 import IncidentTimeline from "./IncidentTimeline";
+import IncidentCommandCenter from "./IncidentCommandCenter";
+import ServiceHealthOverview from "./ServiceHealthOverview";
+import RcaEvidenceChain from "./RcaEvidenceChain";
+import IncidentImpactMap from "./IncidentImpactMap";
+import AnomalyEarlyWarning from "./AnomalyEarlyWarning";
 
 const API_URL = "http://127.0.0.1:8000";
 
@@ -46,6 +51,11 @@ function App() {
   const [incidentAnalysis, setIncidentAnalysis] = useState(null);
 
   const selectedIncidentIdRef = useRef(null);
+  const [anomalyData, setAnomalyData] =
+  useState(null);
+
+const [anomalyLoading, setAnomalyLoading] =
+  useState(false);
 
   useEffect(() => {
     selectedIncidentIdRef.current =
@@ -135,6 +145,41 @@ function App() {
     },
     []
   );
+
+  // =========================================================
+// FETCH ANOMALIES
+// =========================================================
+
+  const fetchAnomalies = useCallback(
+  async (options = {}) => {
+    const silent =
+      options.silent === true;
+
+    try {
+      if (!silent) {
+        setAnomalyLoading(true);
+      }
+
+      const response = await axios.get(
+        `${API_URL}/api/telemetry/anomalies`
+      );
+
+      setAnomalyData(
+        response.data
+      );
+    } catch (err) {
+      console.error(
+        "Failed to fetch anomaly data:",
+        err
+      );
+    } finally {
+      if (!silent) {
+        setAnomalyLoading(false);
+      }
+    }
+  },
+  []
+);
 
   // =========================================================
   // FETCH INCIDENTS
@@ -299,13 +344,15 @@ const fetchDependencyGraph = useCallback(
   fetchIncidents();
   fetchServices();
   fetchDependencyGraph();
+  fetchAnomalies();
 }, [
   fetchAnalysis,
   fetchLogs,
   fetchLogIntelligence,
   fetchIncidents,
   fetchServices,
-  fetchDependencyGraph
+  fetchDependencyGraph,
+  fetchAnomalies
 ]);
 
   // =========================================================
@@ -321,7 +368,10 @@ const fetchDependencyGraph = useCallback(
   fetchLogIntelligence({ silent: true }),
   fetchIncidents({ silent: true }),
   fetchServices({ silent: true }),
-  fetchDependencyGraph({ silent: true })
+  fetchDependencyGraph({ silent: true }),
+  fetchAnomalies({
+  silent: true
+})
 ]);
 
         const incidentId =
@@ -1035,232 +1085,197 @@ const fetchDependencyGraph = useCallback(
         </div>
       </section>
 
-      <div className="dashboard-grid dashboard-main-grid">
-        <section className="panel service-health-panel">
-          <div className="panel-header">
-            <div>
-              <span className="eyebrow">
-                SERVICE HEALTH
-              </span>
+      <IncidentCommandCenter
+  activeIncidents={activeIncidents}
+  patterns={patterns}
+  rootCause={rootCause}
+  serviceHealth={serviceHealth}
+  onOpenIncident={(incident) => {
+    fetchIncidentDetails(
+      incident.incident_id
+    );
+    setActivePage("Incidents");
+  }}
+  onOpenServices={(service) => {
+    if (service) {
+      setSelectedService(service);
+    }
 
-              <h2>
-                Infrastructure Overview
-              </h2>
+    setActivePage("Services");
+  }}
+/>
 
-              <p className="panel-description">
-                Current health signals across
-                monitored services
-              </p>
-            </div>
 
-            <span className="panel-count">
-              {services.length} services
-            </span>
-          </div>
 
-          <div className="services-grid">
-            {services.length === 0 ? (
-              <div className="empty-inline">
-                No service telemetry available.
-              </div>
-            ) : (
-              services.map((service) => {
-                const backendData =
-                  backendServices.find(
-                    (item) =>
-                      item.service === service
-                  );
+<ServiceHealthOverview
+  services={services}
+  backendServices={backendServices}
+  patterns={patterns}
+  rootCause={rootCause}
+  serviceSummary={serviceSummary}
+  onOpenService={(service) => {
+    if (service) {
+      setSelectedService(service);
+    }
 
-                const serviceData =
-                  backendData ||
-                  patterns[service];
+    setActivePage("Services");
+  }}
+/>
 
-                const failures =
-                  backendData
-                    ? backendData.total_failures
-                    : typeof serviceData === "number"
-                    ? serviceData
-                    : serviceData?.total_failures || 0;
+<AnomalyEarlyWarning
+  anomalyData={anomalyData}
+  loading={anomalyLoading}
+  onOpenService={(service) => {
+    if (service) {
+      setSelectedService(service);
+    }
 
-                const health =
-                  backendData?.health ||
-                  (failures >= 3
-                    ? "CRITICAL"
-                    : failures > 0
-                    ? "DEGRADED"
-                    : "HEALTHY");
+    setActivePage("Services");
+  }}
+/>
 
-                const isRoot =
-                  service === rootCause.root_cause;
+<RcaEvidenceChain
+  candidates={candidates}
+  rootCause={rootCause}
+  serviceHealth={serviceHealth}
+  onOpenService={(service) => {
+    if (service) {
+      setSelectedService(service);
+    }
 
-                return (
-                  <div
-                    className={`service-card ${
-                      isRoot
-                        ? "service-root"
-                        : ""
-                    } ${
-                      health === "CRITICAL"
-                        ? "service-critical"
-                        : ""
-                    }`}
-                    key={service}
-                  >
-                    <div className="service-top">
-                      <div className="service-icon">
-                        {getServiceInitial(
-                          service
-                        )}
-                      </div>
+    setActivePage("Services");
+  }}
+/>
 
-                      <div className="service-title">
-                        <strong>
-                          {service}
-                        </strong>
+<IncidentImpactMap
+  activeIncidents={activeIncidents}
+  rootCause={rootCause}
+  serviceHealth={serviceHealth}
+  onOpenIncident={(incident) => {
+    fetchIncidentDetails(
+      incident.incident_id
+    );
 
-                        <span>
-                          {isRoot
-                            ? "Root cause candidate"
-                            : failures > 0
-                            ? `${failures} failures detected`
-                            : "No failures detected"}
-                        </span>
-                      </div>
+    setActivePage("Incidents");
+  }}
+  onOpenService={(service) => {
+    if (service) {
+      setSelectedService(service);
+    }
 
-                      <div
-                        className={`service-health-dot ${getServiceHealthClass(
-                          health
-                        )}`}
-                      />
-                    </div>
+    setActivePage("Services");
+  }}
+/>
 
-                    <div className="service-card-divider" />
 
-                    <div className="service-status-row">
-                      <span
-                        className={getServiceStatusClass(
-                          health
-                        )}
-                      >
-                        {health}
-                      </span>
 
-                      {isRoot && (
-                        <span className="root-label">
-                          RCA CANDIDATE
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </section>
 
-        <section className="panel root-cause-card">
-          <div className="root-cause-header">
-            <div>
-              <span className="eyebrow">
-                AI INTELLIGENCE
-              </span>
+<div className="dashboard-grid dashboard-main-grid">
 
-              <h2>
-                Most Likely Root Cause
-              </h2>
-            </div>
+  <section className="panel root-cause-card">
+    <div className="root-cause-header">
+      <div>
+        <span className="eyebrow">
+          AI INTELLIGENCE
+        </span>
 
-            <div className="ai-badge">
-              AI
-            </div>
-          </div>
-
-          <div className="root-cause-main">
-            <span className="root-cause-label">
-              PRIMARY SUSPECT
-            </span>
-
-            <div className="root-cause-name">
-              {rootCause.root_cause ||
-                "Unknown"}
-            </div>
-
-            <div className="root-cause-confidence-row">
-              <span
-                className={`confidence-badge ${getConfidenceClass(
-                  rootCause.confidence
-                )}`}
-              >
-                {rootCause.confidence ||
-                  "Unknown"}{" "}
-                confidence
-              </span>
-
-              {candidates.length > 0 && (
-                <span className="candidate-rank-badge">
-                  Rank #1
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="root-cause-reason-box">
-            <span className="reason-label">
-              ANALYSIS
-            </span>
-
-            <p className="root-cause-reason">
-              {rootCause.reason ||
-                "No root-cause explanation is currently available."}
-            </p>
-          </div>
-
-          {rootCause.evidence?.length > 0 && (
-            <div className="evidence">
-              <div className="section-mini-header">
-                <strong>
-                  Evidence supporting diagnosis
-                </strong>
-
-                <span>
-                  {rootCause.evidence.length}
-                </span>
-              </div>
-
-              {rootCause.evidence
-                .slice(0, 4)
-                .map((item, index) => (
-                  <div
-                    className="evidence-item"
-                    key={index}
-                  >
-                    <span className="evidence-check">
-                      ✓
-                    </span>
-
-                    <span>
-                      {item}
-                    </span>
-                  </div>
-                ))}
-            </div>
-          )}
-        </section>
+        <h2>
+          Most Likely Root Cause
+        </h2>
       </div>
 
-      <div className="dashboard-grid dashboard-secondary-grid">
-        <section className="panel">
-          <div className="panel-header">
-            <div>
-              <span className="eyebrow">
-                FAILURE CORRELATION
+      <div className="ai-badge">
+        AI
+      </div>
+    </div>
+
+    <div className="root-cause-main">
+      <span className="root-cause-label">
+        PRIMARY SUSPECT
+      </span>
+
+      <div className="root-cause-name">
+        {rootCause.root_cause ||
+          "Unknown"}
+      </div>
+
+      <div className="root-cause-confidence-row">
+        <span
+          className={`confidence-badge ${getConfidenceClass(
+            rootCause.confidence
+          )}`}
+        >
+          {rootCause.confidence ||
+            "Unknown"}{" "}
+          confidence
+        </span>
+
+        {candidates.length > 0 && (
+          <span className="candidate-rank-badge">
+            Rank #1
+          </span>
+        )}
+      </div>
+    </div>
+
+    <div className="root-cause-reason-box">
+      <span className="reason-label">
+        ANALYSIS
+      </span>
+
+      <p className="root-cause-reason">
+        {rootCause.reason ||
+          "No root-cause explanation is currently available."}
+      </p>
+    </div>
+
+    {rootCause.evidence?.length > 0 && (
+      <div className="evidence">
+        <div className="section-mini-header">
+          <strong>
+            Evidence supporting diagnosis
+          </strong>
+
+          <span>
+            {rootCause.evidence.length}
+          </span>
+        </div>
+
+        {rootCause.evidence
+          .slice(0, 4)
+          .map((item, index) => (
+            <div
+              className="evidence-item"
+              key={index}
+            >
+              <span className="evidence-check">
+                ✓
               </span>
 
-              <h2>
-                Common Failure Patterns
-              </h2>
+              <span>
+                {item}
+              </span>
             </div>
-          </div>
+          ))}
+      </div>
+    )}
+  </section>
+
+</div>
+
+<div className="dashboard-grid dashboard-secondary-grid">
+  <section className="panel">
+    <div className="panel-header">
+      <div>
+        <span className="eyebrow">
+          FAILURE CORRELATION
+        </span>
+
+        <h2>
+          Common Failure Patterns
+        </h2>
+      </div>
+    </div>
 
           <div className="correlation-list">
             {Object.entries(correlations).length ===

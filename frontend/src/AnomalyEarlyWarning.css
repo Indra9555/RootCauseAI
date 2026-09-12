@@ -1,0 +1,636 @@
+.anomaly-warning-panel {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 24px;
+  padding: 24px;
+  border: 1px solid var(--border-color, #263244);
+  border-radius: 16px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(18, 25, 38, 0.98),
+      rgba(12, 18, 29, 0.98)
+    );
+  box-shadow:
+    0 14px 35px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+/* =========================================================
+   Header
+   ========================================================= */
+
+.anomaly-warning-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+
+.anomaly-eyebrow {
+  margin-bottom: 7px;
+  color: #8fa1b8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+}
+
+.anomaly-warning-header h2 {
+  margin: 0;
+  color: #f3f6fb;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.anomaly-warning-header p {
+  max-width: 680px;
+  margin: 7px 0 0;
+  color: #8998ac;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.anomaly-header-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+  padding: 9px 13px;
+  border: 1px solid #2a3547;
+  border-radius: 999px;
+  background: rgba(10, 15, 24, 0.65);
+  color: #b8c4d4;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.anomaly-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #68778c;
+}
+
+.anomaly-status-dot.active {
+  background: #f0a35b;
+  box-shadow:
+    0 0 0 4px rgba(240, 163, 91, 0.1),
+    0 0 12px rgba(240, 163, 91, 0.35);
+}
+
+/* =========================================================
+   Anomaly list
+   ========================================================= */
+
+.anomaly-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.anomaly-card {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 18px;
+  border: 1px solid #2b3749;
+  border-radius: 13px;
+  background: rgba(11, 17, 27, 0.7);
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.anomaly-card:hover {
+  transform: translateY(-1px);
+  border-color: #3b4a60;
+  background: rgba(15, 22, 34, 0.9);
+}
+
+.anomaly-card.anomaly-high {
+  border-left: 3px solid #e39a55;
+}
+
+.anomaly-card.anomaly-critical {
+  border-left: 3px solid #e45f68;
+}
+
+.anomaly-card.anomaly-medium {
+  border-left: 3px solid #d4ad58;
+}
+
+/* =========================================================
+   Card top
+   ========================================================= */
+
+.anomaly-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.anomaly-service-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.anomaly-warning-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 1px solid rgba(240, 163, 91, 0.28);
+  border-radius: 9px;
+  background: rgba(240, 163, 91, 0.08);
+  color: #f0a35b;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.anomaly-service-info h3 {
+  margin: 0;
+  color: #edf2f8;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.anomaly-subtitle {
+  display: block;
+  margin-top: 3px;
+  color: #738196;
+  font-size: 11px;
+}
+
+.anomaly-severity {
+  flex-shrink: 0;
+  padding: 5px 9px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.anomaly-severity.anomaly-high {
+  background: rgba(227, 154, 85, 0.11);
+  color: #f0a35b;
+}
+
+.anomaly-severity.anomaly-critical {
+  background: rgba(228, 95, 104, 0.11);
+  color: #ed737b;
+}
+
+.anomaly-severity.anomaly-medium {
+  background: rgba(212, 173, 88, 0.11);
+  color: #dfc16b;
+}
+
+/* =========================================================
+   Metrics
+   ========================================================= */
+
+.anomaly-metrics {
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 17px;
+}
+
+.anomaly-metric {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #202c3d;
+  border-radius: 9px;
+  background: rgba(16, 23, 35, 0.7);
+}
+
+.anomaly-metric span {
+  display: block;
+  color: #68778c;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.anomaly-metric strong {
+  display: inline-block;
+  margin-top: 5px;
+  color: #eaf0f7;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.anomaly-metric small {
+  display: block;
+  margin-top: 1px;
+  color: #66758a;
+  font-size: 9px;
+}
+
+/* =========================================================
+   Score
+   ========================================================= */
+
+.anomaly-score-section {
+  margin-top: 16px;
+}
+
+.anomaly-score-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  color: #8391a4;
+  font-size: 10px;
+}
+
+.anomaly-score-label strong {
+  color: #c6d0dd;
+  font-size: 10px;
+}
+
+.anomaly-score-track {
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #202b3b;
+}
+
+.anomaly-score-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    #d2a052,
+    #e39a55
+  );
+  transition: width 0.35s ease;
+}
+
+/* =========================================================
+   Incident context
+   ========================================================= */
+
+.anomaly-incident-context {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #202c3d;
+  border-radius: 10px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(15, 23, 35, 0.9),
+      rgba(11, 18, 28, 0.8)
+    );
+}
+
+.anomaly-context-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 11px;
+}
+
+.anomaly-context-eyebrow {
+  color: #718198;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.anomaly-context-badge {
+  padding: 4px 7px;
+  border-radius: 5px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+}
+
+.anomaly-context-badge.root_cause_anomaly {
+  background: rgba(228, 95, 104, 0.1);
+  color: #ed737b;
+}
+
+.anomaly-context-badge.affected_service_anomaly {
+  background: rgba(227, 154, 85, 0.1);
+  color: #e9a15d;
+}
+
+.anomaly-context-badge.standalone_anomaly {
+  background: rgba(116, 132, 154, 0.1);
+  color: #94a2b5;
+}
+
+.anomaly-context-badge.incident_context {
+  background: rgba(116, 132, 154, 0.1);
+  color: #94a2b5;
+}
+
+/* =========================================================
+   Active incident
+   ========================================================= */
+
+.anomaly-incident-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.anomaly-incident-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.anomaly-incident-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: 1px solid #344258;
+  border-radius: 7px;
+  background: #182232;
+  color: #9aabc0;
+  font-size: 12px;
+}
+
+.anomaly-incident-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.anomaly-incident-details strong {
+  color: #d7e0eb;
+  font-size: 11px;
+}
+
+.anomaly-incident-details span {
+  margin-top: 2px;
+  overflow: hidden;
+  color: #758398;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anomaly-incident-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.anomaly-incident-meta span {
+  color: #68778c;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.anomaly-incident-meta strong {
+  margin-top: 3px;
+  color: #c7d2df;
+  font-size: 11px;
+}
+
+.anomaly-incident-meta small {
+  margin-top: 2px;
+  color: #647288;
+  font-size: 8px;
+  text-transform: capitalize;
+}
+
+/* =========================================================
+   Standalone anomaly
+   ========================================================= */
+
+.anomaly-standalone-content {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.anomaly-standalone-icon {
+  color: #77879c;
+  font-size: 15px;
+}
+
+.anomaly-standalone-content strong {
+  color: #bac5d3;
+  font-size: 10px;
+}
+
+.anomaly-standalone-content p {
+  margin: 3px 0 0;
+  color: #68778c;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+/* =========================================================
+   Card footer
+   ========================================================= */
+
+.anomaly-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 15px;
+  padding-top: 13px;
+  border-top: 1px solid #202b3b;
+}
+
+.anomaly-explanation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #8795a8;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.anomaly-explanation strong {
+  color: #c5cfdb;
+}
+
+.anomaly-footer-icon {
+  color: #d99a55;
+  font-size: 12px;
+}
+
+.anomaly-inspect-button {
+  flex-shrink: 0;
+  padding: 7px 11px;
+  border: 1px solid #344258;
+  border-radius: 7px;
+  background: #172131;
+  color: #b9c6d6;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.anomaly-inspect-button:hover {
+  border-color: #52637b;
+  background: #1d2a3d;
+  color: #f0f4f8;
+}
+
+/* =========================================================
+   Empty / clear states
+   ========================================================= */
+
+.anomaly-empty-state,
+.anomaly-clear-state {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid #253143;
+  border-radius: 11px;
+  background: rgba(13, 20, 31, 0.65);
+}
+
+.anomaly-empty-icon,
+.anomaly-clear-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.anomaly-empty-icon {
+  background: rgba(142, 157, 178, 0.08);
+  color: #91a0b3;
+}
+
+.anomaly-clear-icon {
+  background: rgba(79, 178, 130, 0.09);
+  color: #72c596;
+}
+
+.anomaly-empty-state strong,
+.anomaly-clear-state strong {
+  color: #d8e0ea;
+  font-size: 13px;
+}
+
+.anomaly-empty-state p,
+.anomaly-clear-state p {
+  margin: 4px 0 0;
+  color: #748298;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   Panel footer
+   ========================================================= */
+
+.anomaly-warning-footer {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 13px;
+  border-top: 1px solid #202b3b;
+  color: #68768a;
+  font-size: 10px;
+}
+
+.anomaly-warning-footer strong {
+  color: #9eacbd;
+}
+
+/* =========================================================
+   Responsive
+   ========================================================= */
+
+@media (max-width: 900px) {
+  .anomaly-metrics {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 650px) {
+  .anomaly-warning-panel {
+    padding: 18px;
+  }
+
+  .anomaly-warning-header {
+    flex-direction: column;
+  }
+
+  .anomaly-header-status {
+    align-self: flex-start;
+  }
+
+  .anomaly-incident-content {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .anomaly-incident-meta {
+    align-items: flex-start;
+  }
+
+  .anomaly-card-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .anomaly-inspect-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 450px) {
+  .anomaly-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .anomaly-card-top {
+    align-items: flex-start;
+  }
+
+  .anomaly-context-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .anomaly-warning-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 7px;
+  }
+}

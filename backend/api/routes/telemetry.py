@@ -11,6 +11,10 @@ from analysis.pattern_detector import (
     build_log_intelligence_summary
 )
 from incidents.incident_service import get_or_create_incident
+from analysis.anomaly_detector import detect_anomalies
+from analysis.anomaly_incident_context import (
+    build_anomaly_incident_context
+)
 
 
 router = APIRouter(
@@ -258,4 +262,35 @@ def get_log_analysis(
             "root_cause_explanation",
             {}
         )
+    }
+@router.get("/anomalies")
+def get_anomalies(
+    db: Session = Depends(get_db)
+):
+    logs = (
+        db.query(Log)
+        .order_by(Log.timestamp.asc())
+        .all()
+    )
+
+    result = detect_anomalies(logs)
+
+    if result.get("status") != "ok":
+        return result
+
+    anomalies = result.get(
+        "anomalies",
+        []
+    )
+
+    contextual_anomalies = (
+        build_anomaly_incident_context(
+            db,
+            anomalies
+        )
+    )
+
+    return {
+        **result,
+        "anomalies": contextual_anomalies
     }

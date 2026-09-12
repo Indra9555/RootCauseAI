@@ -9,6 +9,7 @@ import axios from "axios";
 import "./App.css";
 import "./ServiceDrilldown.css";
 import "./IncidentCorrelation.css";
+import DependencyGraph from "./DependencyGraph";
 
 const API_URL = "http://127.0.0.1:8000";
 
@@ -18,6 +19,9 @@ function App() {
   const [logIntelligence, setLogIntelligence] = useState(null);
   const [incidents, setIncidents] = useState([]);
   const [serviceHealth, setServiceHealth] = useState(null);
+  const [dependencyGraph, setDependencyGraph] = useState(null);
+  const [dependencyGraphLoading, setDependencyGraphLoading] =
+    useState(false);
 
   const [loading, setLoading] = useState(true);
   const [logsLoading, setLogsLoading] = useState(false);
@@ -190,6 +194,38 @@ function App() {
   }, []);
 
   // =========================================================
+// FETCH DEPENDENCY GRAPH
+// =========================================================
+
+const fetchDependencyGraph = useCallback(
+  async (options = {}) => {
+    const silent = options.silent === true;
+
+    try {
+      if (!silent) {
+        setDependencyGraphLoading(true);
+      }
+
+      const response = await axios.get(
+        `${API_URL}/api/dependencies`
+      );
+
+      setDependencyGraph(response.data);
+    } catch (err) {
+      console.error(
+        "Failed to fetch dependency graph:",
+        err
+      );
+    } finally {
+      if (!silent) {
+        setDependencyGraphLoading(false);
+      }
+    }
+  },
+  []
+);
+
+  // =========================================================
   // FETCH SINGLE INCIDENT
   // =========================================================
 
@@ -256,18 +292,20 @@ function App() {
   // =========================================================
 
   useEffect(() => {
-    fetchAnalysis();
-    fetchLogs();
-    fetchLogIntelligence();
-    fetchIncidents();
-    fetchServices();
-  }, [
-    fetchAnalysis,
-    fetchLogs,
-    fetchLogIntelligence,
-    fetchIncidents,
-    fetchServices
-  ]);
+  fetchAnalysis();
+  fetchLogs();
+  fetchLogIntelligence();
+  fetchIncidents();
+  fetchServices();
+  fetchDependencyGraph();
+}, [
+  fetchAnalysis,
+  fetchLogs,
+  fetchLogIntelligence,
+  fetchIncidents,
+  fetchServices,
+  fetchDependencyGraph
+]);
 
   // =========================================================
   // REAL-TIME POLLING
@@ -277,12 +315,13 @@ function App() {
     const interval = setInterval(async () => {
       try {
         await Promise.all([
-          fetchAnalysis({ silent: true }),
-          fetchLogs({ silent: true }),
-          fetchLogIntelligence({ silent: true }),
-          fetchIncidents({ silent: true }),
-          fetchServices({ silent: true })
-        ]);
+  fetchAnalysis({ silent: true }),
+  fetchLogs({ silent: true }),
+  fetchLogIntelligence({ silent: true }),
+  fetchIncidents({ silent: true }),
+  fetchServices({ silent: true }),
+  fetchDependencyGraph({ silent: true })
+]);
 
         const incidentId =
           selectedIncidentIdRef.current;
@@ -310,6 +349,7 @@ function App() {
     fetchLogIntelligence,
     fetchIncidents,
     fetchServices,
+    fetchDependencyGraph,
     fetchIncidentDetails
   ]);
 
@@ -2069,6 +2109,28 @@ function App() {
               </p>
             </div>
           </div>
+
+          <section className="dependency-visualization-section">
+  {dependencyGraphLoading &&
+  !dependencyGraph ? (
+    <section className="panel">
+      <div className="logs-empty">
+        <div className="mini-spinner" />
+
+        <p>
+          Loading system dependency map...
+        </p>
+      </div>
+    </section>
+  ) : dependencyGraph ? (
+    <DependencyGraph
+      data={dependencyGraph}
+      onServiceClick={(serviceName) => {
+        setSelectedService(serviceName);
+      }}
+    />
+  ) : null}
+</section>
 
           <section className="service-detail-grid">
             {servicesLoading &&

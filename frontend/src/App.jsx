@@ -10,6 +10,7 @@ import "./App.css";
 import "./ServiceDrilldown.css";
 import "./IncidentCorrelation.css";
 import DependencyGraph from "./DependencyGraph";
+import IncidentTimeline from "./IncidentTimeline";
 
 const API_URL = "http://127.0.0.1:8000";
 
@@ -3248,114 +3249,11 @@ const fetchDependencyGraph = useCallback(
           </div>
         </section>
 
-        <section className="panel incident-events-panel">
-          <div className="panel-header">
-            <div>
-              <span className="eyebrow">
-                INCIDENT TIMELINE
-              </span>
-
-              <h2>
-                Incident Event History
-              </h2>
-
-              <p className="panel-description">
-                Persisted lifecycle events
-                recorded by RootCauseAI
-              </p>
-            </div>
-
-            <span className="panel-count">
-              {incidentEvents.length} events
-            </span>
-          </div>
-
-          {eventsLoading ? (
-            <div className="logs-empty">
-              <div className="mini-spinner" />
-
-              <p>
-                Loading incident events...
-              </p>
-            </div>
-          ) : incidentEvents.length === 0 ? (
-            <div className="logs-empty">
-              <div className="empty-icon">
-                ⌁
-              </div>
-
-              <h3>
-                No incident events
-              </h3>
-
-              <p>
-                No persisted events were
-                recorded for this incident.
-              </p>
-            </div>
-          ) : (
-            <div className="incident-event-timeline">
-              {incidentEvents.map(
-                (event, index) => (
-                  <div
-                    className="incident-event-row"
-                    key={event.id}
-                  >
-                    <div
-                      className={`incident-event-marker ${getEventClass(
-                        event.event_type
-                      )}`}
-                    >
-                      {getEventIcon(
-                        event.event_type
-                      )}
-                    </div>
-
-                    {index <
-                      incidentEvents.length -
-                        1 && (
-                      <div className="incident-event-line" />
-                    )}
-
-                    <div className="incident-event-content">
-                      <div className="incident-event-header">
-                        <div className="event-heading">
-                          <span
-                            className={`event-type-badge ${getEventClass(
-                              event.event_type
-                            )}`}
-                          >
-                            {formatEventType(
-                              event.event_type
-                            )}
-                          </span>
-
-                          {event.service && (
-                            <span className="service-badge">
-                              {event.service}
-                            </span>
-                          )}
-                        </div>
-
-                        <span className="timeline-time">
-                          {formatTimestamp(
-                            event.timestamp
-                          )}
-                        </span>
-                      </div>
-
-                      {event.message && (
-                        <p>
-                          {event.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )
-              )}
-            </div>
-          )}
-        </section>
+        <IncidentTimeline
+  incident={selectedIncident}
+  events={incidentEvents}
+  loading={eventsLoading}
+/>
 
         <section className="panel">
           <div className="panel-header">

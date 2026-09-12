@@ -1,0 +1,331 @@
+/* =========================================================
+   INCIDENT ↔ SERVICE CORRELATION
+   Scoped additions — does not modify App.css or
+   ServiceDrilldown.css.
+   ========================================================= */
+
+.incident-correlation-panel {
+  overflow: hidden;
+}
+
+.incident-correlation-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 14px;
+  margin: 4px 0 24px;
+}
+
+.correlation-flow-step {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.correlation-flow-step.correlation-flow-incident {
+  border-color: rgba(255, 92, 92, 0.2);
+}
+
+.correlation-flow-step.correlation-flow-root {
+  border-color: rgba(102, 214, 153, 0.22);
+  background: rgba(102, 214, 153, 0.045);
+}
+
+.correlation-flow-label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.correlation-flow-step strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  color: #f4f7fb;
+}
+
+.correlation-flow-step small {
+  display: block;
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.48);
+  line-height: 1.45;
+}
+
+.correlation-flow-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 20px;
+}
+
+.incident-correlation-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.incident-correlation-services,
+.incident-correlation-network {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.correlation-subheader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.correlation-subheader .eyebrow {
+  margin-bottom: 5px;
+}
+
+.correlation-subheader h3 {
+  margin: 0;
+  font-size: 15px;
+  color: #f0f3f7;
+}
+
+.correlation-subcount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.incident-correlation-service-list,
+.incident-dependency-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.incident-correlation-service {
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.incident-correlation-service.correlation-service-root {
+  border-color: rgba(102, 214, 153, 0.24);
+  background: rgba(102, 214, 153, 0.045);
+}
+
+.incident-correlation-service-main {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.incident-correlation-service-main > div:last-child {
+  min-width: 0;
+}
+
+.incident-correlation-service-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.incident-correlation-service-title strong {
+  font-size: 14px;
+  color: #eef2f6;
+}
+
+.incident-correlation-service-main > div:last-child > span {
+  display: block;
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 11px;
+}
+
+.incident-correlation-service-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.incident-correlation-service-meta > span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.incident-correlation-service-meta > span strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.incident-service-inspect-button {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(255, 255, 255, 0.68);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: 0.18s ease;
+}
+
+.incident-service-inspect-button:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.075);
+  color: #fff;
+}
+
+.incident-dependency-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.8fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.incident-dependency-service {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.incident-dependency-service strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+}
+
+.incident-dependency-direction {
+  min-width: 0;
+}
+
+.incident-dependency-direction span {
+  display: block;
+  margin-bottom: 4px;
+  color: rgba(255, 255, 255, 0.34);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.incident-dependency-direction strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.incident-correlation-conclusion {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(102, 214, 153, 0.15);
+  border-radius: 11px;
+  background: rgba(102, 214, 153, 0.035);
+}
+
+.correlation-conclusion-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 8px;
+  background: rgba(102, 214, 153, 0.1);
+  color: #9be4bd;
+}
+
+.incident-correlation-conclusion .eyebrow {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.incident-correlation-conclusion strong {
+  display: block;
+  color: #eaf7ef;
+  font-size: 12px;
+}
+
+.incident-correlation-conclusion p {
+  margin: 6px 0 0;
+  color: rgba(255, 255, 255, 0.44);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+@media (max-width: 1000px) {
+  .incident-correlation-flow {
+    grid-template-columns: 1fr;
+  }
+
+  .correlation-flow-arrow {
+    transform: rotate(90deg);
+  }
+
+  .incident-correlation-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .incident-correlation-service-meta {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .incident-service-inspect-button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .incident-dependency-row {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+}

@@ -6,6 +6,7 @@ from database import models
 
 from api.routes.telemetry import router as telemetry_router
 from api.incidents.routes import router as incidents_router
+from api.routes.services import router as services_router
 
 
 app = FastAPI(
@@ -48,3 +49,6 @@ app.include_router(telemetry_router)
 
 # Incident API
 app.include_router(incidents_router)
+
+# Services API
+app.include_router(services_router)

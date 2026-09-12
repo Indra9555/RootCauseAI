@@ -7,6 +7,9 @@ from schemas.telemetry import LogEntry
 
 from analysis.log_classifier import classify_log_level
 from analysis.log_analysis_service import analyze_logs
+from analysis.pattern_detector import (
+    build_log_intelligence_summary
+)
 from incidents.incident_service import get_or_create_incident
 
 
@@ -29,13 +32,8 @@ def ingest_log(
     Store incoming telemetry and automatically process
     incident detection and RCA.
 
-    IMPORTANT:
-
-    The newly ingested log is passed explicitly as the
+    The newly ingested log is explicitly used as the
     incident trigger.
-
-    Historical logs remain available as RCA context,
-    but they cannot replace the current trigger event.
     """
 
     severity = classify_log_level(
@@ -157,6 +155,39 @@ def get_telemetry_logs(
         }
         for log in logs
     ]
+
+
+# =========================================================
+# LOG INTELLIGENCE
+# =========================================================
+
+@router.get("/intelligence")
+def get_log_intelligence(
+    db: Session = Depends(get_db)
+):
+    """
+    Analyze stored telemetry for log-intelligence insights.
+
+    Provides:
+    - total log count
+    - total failure count
+    - failure count per service
+    - severity-level counts
+    - repeated failure messages
+    - repeated failure messages per service
+    """
+
+    logs = (
+        db.query(Log)
+        .order_by(
+            Log.timestamp.asc()
+        )
+        .all()
+    )
+
+    return build_log_intelligence_summary(
+        logs
+    )
 
 
 # =========================================================

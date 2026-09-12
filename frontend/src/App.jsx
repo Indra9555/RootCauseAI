@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import axios from "axios";
 import "./App.css";
 
@@ -8,6 +14,7 @@ function App() {
   const [analysis, setAnalysis] = useState(null);
   const [logs, setLogs] = useState([]);
   const [incidents, setIncidents] = useState([]);
+  const [serviceHealth, setServiceHealth] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [logsLoading, setLogsLoading] = useState(false);
@@ -15,6 +22,7 @@ function App() {
   const [eventsLoading, setEventsLoading] = useState(false);
   const [incidentAnalysisLoading, setIncidentAnalysisLoading] =
     useState(false);
+  const [servicesLoading, setServicesLoading] = useState(false);
 
   const [error, setError] = useState("");
   const [activePage, setActivePage] = useState("Dashboard");
@@ -28,24 +36,25 @@ function App() {
   const [incidentEvents, setIncidentEvents] = useState([]);
   const [incidentAnalysis, setIncidentAnalysis] = useState(null);
 
-  // =========================================================
-  // INITIAL DATA
-  // =========================================================
+  const selectedIncidentIdRef = useRef(null);
 
   useEffect(() => {
-    fetchAnalysis();
-    fetchLogs();
-    fetchIncidents();
-  }, []);
+    selectedIncidentIdRef.current =
+      selectedIncident?.incident_id || null;
+  }, [selectedIncident]);
 
   // =========================================================
   // FETCH ANALYSIS
   // =========================================================
 
-  const fetchAnalysis = async () => {
+  const fetchAnalysis = useCallback(async (options = {}) => {
+    const silent = options.silent === true;
+
     try {
-      setLoading(true);
-      setError("");
+      if (!silent) {
+        setLoading(true);
+        setError("");
+      }
 
       const response = await axios.get(
         `${API_URL}/api/telemetry/analysis`
@@ -54,19 +63,30 @@ function App() {
       setAnalysis(response.data);
     } catch (err) {
       console.error(err);
-      setError("Unable to connect to RootCauseAI backend.");
+
+      if (!silent) {
+        setError(
+          "Unable to connect to RootCauseAI backend."
+        );
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
-  };
+  }, []);
 
   // =========================================================
   // FETCH LOGS
   // =========================================================
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async (options = {}) => {
+    const silent = options.silent === true;
+
     try {
-      setLogsLoading(true);
+      if (!silent) {
+        setLogsLoading(true);
+      }
 
       const response = await axios.get(
         `${API_URL}/api/telemetry/logs`
@@ -74,19 +94,28 @@ function App() {
 
       setLogs(response.data);
     } catch (err) {
-      console.error("Failed to fetch logs:", err);
+      console.error(
+        "Failed to fetch logs:",
+        err
+      );
     } finally {
-      setLogsLoading(false);
+      if (!silent) {
+        setLogsLoading(false);
+      }
     }
-  };
+  }, []);
 
   // =========================================================
   // FETCH INCIDENTS
   // =========================================================
 
-  const fetchIncidents = async () => {
+  const fetchIncidents = useCallback(async (options = {}) => {
+    const silent = options.silent === true;
+
     try {
-      setIncidentsLoading(true);
+      if (!silent) {
+        setIncidentsLoading(true);
+      }
 
       const response = await axios.get(
         `${API_URL}/api/incidents`
@@ -94,60 +123,165 @@ function App() {
 
       setIncidents(response.data);
     } catch (err) {
-      console.error("Failed to fetch incidents:", err);
+      console.error(
+        "Failed to fetch incidents:",
+        err
+      );
     } finally {
-      setIncidentsLoading(false);
+      if (!silent) {
+        setIncidentsLoading(false);
+      }
     }
-  };
+  }, []);
+
+  // =========================================================
+  // FETCH SERVICES
+  // =========================================================
+
+  const fetchServices = useCallback(async (options = {}) => {
+    const silent = options.silent === true;
+
+    try {
+      if (!silent) {
+        setServicesLoading(true);
+      }
+
+      const response = await axios.get(
+        `${API_URL}/api/services`
+      );
+
+      setServiceHealth(response.data);
+    } catch (err) {
+      console.error(
+        "Failed to fetch service health:",
+        err
+      );
+    } finally {
+      if (!silent) {
+        setServicesLoading(false);
+      }
+    }
+  }, []);
 
   // =========================================================
   // FETCH SINGLE INCIDENT
   // =========================================================
 
-  const fetchIncidentDetails = async (incidentId) => {
-    try {
-      setEventsLoading(true);
-      setIncidentAnalysisLoading(true);
+  const fetchIncidentDetails = useCallback(
+    async (incidentId, options = {}) => {
+      const silent = options.silent === true;
 
-      const [
-        incidentResponse,
-        eventsResponse,
-        analysisResponse
-      ] = await Promise.all([
-        axios.get(
-          `${API_URL}/api/incidents/${incidentId}`
-        ),
-        axios.get(
-          `${API_URL}/api/incidents/${incidentId}/events`
-        ),
-        axios.get(
-          `${API_URL}/api/incidents/${incidentId}/analysis`
-        )
-      ]);
+      try {
+        if (!silent) {
+          setEventsLoading(true);
+          setIncidentAnalysisLoading(true);
+        }
 
-      setSelectedIncident(incidentResponse.data);
+        const [
+          incidentResponse,
+          eventsResponse,
+          analysisResponse
+        ] = await Promise.all([
+          axios.get(
+            `${API_URL}/api/incidents/${incidentId}`
+          ),
+          axios.get(
+            `${API_URL}/api/incidents/${incidentId}/events`
+          ),
+          axios.get(
+            `${API_URL}/api/incidents/${incidentId}/analysis`
+          )
+        ]);
 
-      setIncidentEvents(
-        [...eventsResponse.data].sort(
-          (a, b) =>
-            new Date(a.timestamp) -
-            new Date(b.timestamp)
-        )
-      );
+        setSelectedIncident(
+          incidentResponse.data
+        );
 
-      setIncidentAnalysis(analysisResponse.data);
+        setIncidentEvents(
+          [...eventsResponse.data].sort(
+            (a, b) =>
+              new Date(a.timestamp) -
+              new Date(b.timestamp)
+          )
+        );
 
-      setIncidentSelected(true);
-    } catch (err) {
-      console.error(
-        "Failed to fetch incident details:",
-        err
-      );
-    } finally {
-      setEventsLoading(false);
-      setIncidentAnalysisLoading(false);
-    }
-  };
+        setIncidentAnalysis(
+          analysisResponse.data
+        );
+
+        setIncidentSelected(true);
+      } catch (err) {
+        console.error(
+          "Failed to fetch incident details:",
+          err
+        );
+      } finally {
+        if (!silent) {
+          setEventsLoading(false);
+          setIncidentAnalysisLoading(false);
+        }
+      }
+    },
+    []
+  );
+
+  // =========================================================
+  // INITIAL DATA
+  // =========================================================
+
+  useEffect(() => {
+    fetchAnalysis();
+    fetchLogs();
+    fetchIncidents();
+    fetchServices();
+  }, [
+    fetchAnalysis,
+    fetchLogs,
+    fetchIncidents,
+    fetchServices
+  ]);
+
+  // =========================================================
+  // REAL-TIME POLLING
+  // =========================================================
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        await Promise.all([
+          fetchAnalysis({ silent: true }),
+          fetchLogs({ silent: true }),
+          fetchIncidents({ silent: true }),
+          fetchServices({ silent: true })
+        ]);
+
+        const incidentId =
+          selectedIncidentIdRef.current;
+
+        if (incidentId) {
+          await fetchIncidentDetails(
+            incidentId,
+            { silent: true }
+          );
+        }
+      } catch (err) {
+        console.error(
+          "Real-time refresh failed:",
+          err
+        );
+      }
+    }, 5000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [
+    fetchAnalysis,
+    fetchLogs,
+    fetchIncidents,
+    fetchServices,
+    fetchIncidentDetails
+  ]);
 
   // =========================================================
   // REFRESH
@@ -157,7 +291,8 @@ function App() {
     await Promise.all([
       fetchAnalysis(),
       fetchLogs(),
-      fetchIncidents()
+      fetchIncidents(),
+      fetchServices()
     ]);
   };
 
@@ -199,58 +334,95 @@ function App() {
         }
       : rawRootCause || {};
 
-  const correlations = analysis?.correlations || {};
-  const candidates = analysis?.candidates || [];
+  const correlations =
+    analysis?.correlations || {};
+
+  const candidates =
+    analysis?.candidates || [];
 
   const temporalAnalysis =
     analysis?.temporal_analysis || [];
 
-  const services = Object.keys(patterns);
+  const backendServices =
+    serviceHealth?.services || [];
 
-  const totalFailures = Object.values(patterns).reduce(
-    (total, service) => {
-      if (typeof service === "number") {
-        return total + service;
-      }
+  const serviceSummary =
+    serviceHealth?.summary || {
+      total: 0,
+      healthy: 0,
+      degraded: 0,
+      critical: 0
+    };
 
-      return (
-        total +
-        (service?.total_failures || 0)
-      );
-    },
-    0
-  );
+  const services =
+    backendServices.length > 0
+      ? backendServices.map(
+          (service) => service.service
+        )
+      : Object.keys(patterns);
 
-  const criticalEvents = Object.values(patterns).reduce(
-    (total, service) => {
-      if (typeof service === "number") {
-        return total;
-      }
+  const totalFailures =
+    Object.values(patterns).reduce(
+      (total, service) => {
+        if (typeof service === "number") {
+          return total + service;
+        }
 
-      return (
-        total +
-        (service?.critical_count || 0)
-      );
-    },
-    0
-  );
+        return (
+          total +
+          (service?.total_failures || 0)
+        );
+      },
+      0
+    );
 
-  const failingServices = services.filter(
-    (service) =>
-      typeof patterns[service] === "number"
-        ? patterns[service] > 0
-        : (patterns[service]?.total_failures || 0) > 0
-  );
+  const criticalEvents =
+    Object.values(patterns).reduce(
+      (total, service) => {
+        if (typeof service === "number") {
+          return total;
+        }
 
-  const activeIncidents = incidents.filter(
-    (incident) =>
-      String(incident.status).toUpperCase() === "ACTIVE"
-  );
+        return (
+          total +
+          (service?.critical_count || 0)
+        );
+      },
+      0
+    );
 
-  const resolvedIncidents = incidents.filter(
-    (incident) =>
-      String(incident.status).toUpperCase() === "RESOLVED"
-  );
+  const failingServices =
+    backendServices.length > 0
+      ? backendServices
+          .filter(
+            (service) =>
+              service.health !== "HEALTHY"
+          )
+          .map(
+            (service) =>
+              service.service
+          )
+      : services.filter(
+          (service) =>
+            typeof patterns[service] === "number"
+              ? patterns[service] > 0
+              : (patterns[service]?.total_failures || 0) >
+                0
+        );
+
+  const activeIncidents =
+    incidents.filter(
+      (incident) =>
+        String(incident.status).toUpperCase() ===
+        "ACTIVE"
+    );
+
+  const resolvedIncidents =
+    incidents.filter(
+      (incident) =>
+        String(incident.status).toUpperCase() ===
+        "RESOLVED"
+    );
 
   const uniqueServices = useMemo(() => {
     return [
@@ -270,13 +442,20 @@ function App() {
 
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
-      const search = logSearch.toLowerCase();
+      const search =
+        logSearch.toLowerCase();
 
       const matchesSearch =
         !search ||
-        log.message?.toLowerCase().includes(search) ||
-        log.service?.toLowerCase().includes(search) ||
-        log.level?.toLowerCase().includes(search);
+        log.message
+          ?.toLowerCase()
+          .includes(search) ||
+        log.service
+          ?.toLowerCase()
+          .includes(search) ||
+        log.level
+          ?.toLowerCase()
+          .includes(search);
 
       const matchesService =
         serviceFilter === "All" ||
@@ -447,6 +626,36 @@ function App() {
     return service.charAt(0).toUpperCase();
   };
 
+  const getServiceHealthClass = (health) => {
+    const value =
+      String(health || "").toUpperCase();
+
+    if (value === "CRITICAL") {
+      return "health-danger";
+    }
+
+    if (value === "DEGRADED") {
+      return "health-warning";
+    }
+
+    return "health-good";
+  };
+
+  const getServiceStatusClass = (health) => {
+    const value =
+      String(health || "").toUpperCase();
+
+    if (value === "CRITICAL") {
+      return "status-danger";
+    }
+
+    if (value === "DEGRADED") {
+      return "status-warning";
+    }
+
+    return "status-success";
+  };
+
   // =========================================================
   // DASHBOARD
   // =========================================================
@@ -461,11 +670,14 @@ function App() {
 
           <div className="title-row">
             <div>
-              <h1>Root Cause Dashboard</h1>
+              <h1>
+                Root Cause Dashboard
+              </h1>
 
               <p>
-                Real-time software failure intelligence
-                and system health monitoring
+                Real-time software failure
+                intelligence and system health
+                monitoring
               </p>
             </div>
 
@@ -482,25 +694,28 @@ function App() {
           disabled={loading}
         >
           <span>↻</span>
+
           {loading
             ? "Refreshing..."
             : "Refresh Analysis"}
         </button>
       </div>
 
-      {/* KPI OVERVIEW */}
-
       <section className="stats-grid">
         <div className="stat-card stat-services">
           <div className="stat-card-top">
-            <span>MONITORED SERVICES</span>
+            <span>
+              MONITORED SERVICES
+            </span>
 
             <div className="stat-icon">
               ◈
             </div>
           </div>
 
-          <strong>{services.length}</strong>
+          <strong>
+            {serviceSummary.total || services.length}
+          </strong>
 
           <div className="stat-footer">
             <span className="stat-indicator positive">
@@ -515,14 +730,18 @@ function App() {
 
         <div className="stat-card stat-failures">
           <div className="stat-card-top">
-            <span>FAILURES DETECTED</span>
+            <span>
+              FAILURES DETECTED
+            </span>
 
             <div className="stat-icon">
               !
             </div>
           </div>
 
-          <strong>{totalFailures}</strong>
+          <strong>
+            {totalFailures}
+          </strong>
 
           <div className="stat-footer">
             <span className="stat-indicator danger">
@@ -537,14 +756,18 @@ function App() {
 
         <div className="stat-card stat-critical">
           <div className="stat-card-top">
-            <span>CRITICAL EVENTS</span>
+            <span>
+              CRITICAL EVENTS
+            </span>
 
             <div className="stat-icon">
               ⚠
             </div>
           </div>
 
-          <strong>{criticalEvents}</strong>
+          <strong>
+            {criticalEvents}
+          </strong>
 
           <div className="stat-footer">
             <span
@@ -567,7 +790,9 @@ function App() {
 
         <div className="stat-card stat-incidents">
           <div className="stat-card-top">
-            <span>ACTIVE INCIDENTS</span>
+            <span>
+              ACTIVE INCIDENTS
+            </span>
 
             <div className="stat-icon">
               ◉
@@ -596,11 +821,7 @@ function App() {
         </div>
       </section>
 
-      {/* MAIN INTELLIGENCE AREA */}
-
       <div className="dashboard-grid dashboard-main-grid">
-        {/* SERVICE HEALTH */}
-
         <section className="panel service-health-panel">
           <div className="panel-header">
             <div>
@@ -613,8 +834,8 @@ function App() {
               </h2>
 
               <p className="panel-description">
-                Current health signals across monitored
-                services
+                Current health signals across
+                monitored services
               </p>
             </div>
 
@@ -630,20 +851,33 @@ function App() {
               </div>
             ) : (
               services.map((service) => {
+                const backendData =
+                  backendServices.find(
+                    (item) =>
+                      item.service === service
+                  );
+
                 const serviceData =
+                  backendData ||
                   patterns[service];
 
                 const failures =
-                  typeof serviceData === "number"
+                  backendData
+                    ? backendData.total_failures
+                    : typeof serviceData === "number"
                     ? serviceData
                     : serviceData?.total_failures || 0;
 
+                const health =
+                  backendData?.health ||
+                  (failures >= 3
+                    ? "CRITICAL"
+                    : failures > 0
+                    ? "DEGRADED"
+                    : "HEALTHY");
+
                 const isRoot =
                   service === rootCause.root_cause;
-
-                const hasCritical =
-                  typeof serviceData === "object" &&
-                  (serviceData?.critical_count || 0) > 0;
 
                 return (
                   <div
@@ -652,7 +886,7 @@ function App() {
                         ? "service-root"
                         : ""
                     } ${
-                      hasCritical
+                      health === "CRITICAL"
                         ? "service-critical"
                         : ""
                     }`}
@@ -660,11 +894,15 @@ function App() {
                   >
                     <div className="service-top">
                       <div className="service-icon">
-                        {getServiceInitial(service)}
+                        {getServiceInitial(
+                          service
+                        )}
                       </div>
 
                       <div className="service-title">
-                        <strong>{service}</strong>
+                        <strong>
+                          {service}
+                        </strong>
 
                         <span>
                           {isRoot
@@ -676,11 +914,9 @@ function App() {
                       </div>
 
                       <div
-                        className={`service-health-dot ${
-                          failures > 0
-                            ? "health-danger"
-                            : "health-good"
-                        }`}
+                        className={`service-health-dot ${getServiceHealthClass(
+                          health
+                        )}`}
                       />
                     </div>
 
@@ -688,15 +924,11 @@ function App() {
 
                     <div className="service-status-row">
                       <span
-                        className={
-                          failures > 0
-                            ? "status-danger"
-                            : "status-success"
-                        }
+                        className={getServiceStatusClass(
+                          health
+                        )}
                       >
-                        {failures > 0
-                          ? "ATTENTION"
-                          : "HEALTHY"}
+                        {health}
                       </span>
 
                       {isRoot && (
@@ -711,8 +943,6 @@ function App() {
             )}
           </div>
         </section>
-
-        {/* ROOT CAUSE INTELLIGENCE */}
 
         <section className="panel root-cause-card">
           <div className="root-cause-header">
@@ -737,7 +967,8 @@ function App() {
             </span>
 
             <div className="root-cause-name">
-              {rootCause.root_cause || "Unknown"}
+              {rootCause.root_cause ||
+                "Unknown"}
             </div>
 
             <div className="root-cause-confidence-row">
@@ -746,7 +977,8 @@ function App() {
                   rootCause.confidence
                 )}`}
               >
-                {rootCause.confidence || "Unknown"}{" "}
+                {rootCause.confidence ||
+                  "Unknown"}{" "}
                 confidence
               </span>
 
@@ -792,15 +1024,15 @@ function App() {
                       ✓
                     </span>
 
-                    <span>{item}</span>
+                    <span>
+                      {item}
+                    </span>
                   </div>
                 ))}
             </div>
           )}
         </section>
       </div>
-
-      {/* RCA SIGNALS */}
 
       <div className="dashboard-grid dashboard-secondary-grid">
         <section className="panel">
@@ -817,9 +1049,11 @@ function App() {
           </div>
 
           <div className="correlation-list">
-            {Object.entries(correlations).length === 0 ? (
+            {Object.entries(correlations).length ===
+            0 ? (
               <div className="empty-inline">
-                No correlated failure patterns detected.
+                No correlated failure patterns
+                detected.
               </div>
             ) : (
               Object.entries(correlations).map(
@@ -839,7 +1073,9 @@ function App() {
                         </strong>
 
                         <span>
-                          {data.services?.join(", ") ||
+                          {data.services?.join(
+                            ", "
+                          ) ||
                             "Unknown services"}
                         </span>
                       </div>
@@ -876,7 +1112,8 @@ function App() {
 
               <div>
                 <strong>
-                  {rootCause.root_cause || "Unknown"}
+                  {rootCause.root_cause ||
+                    "Unknown"}
                 </strong>
 
                 <span>
@@ -887,7 +1124,9 @@ function App() {
 
             <div className="dependency-arrow">
               <span />
-              <small>impacts</small>
+              <small>
+                impacts
+              </small>
               <span />
             </div>
 
@@ -900,7 +1139,8 @@ function App() {
                 failingServices
                   .filter(
                     (service) =>
-                      service !== rootCause.root_cause
+                      service !==
+                      rootCause.root_cause
                   )
                   .map((service) => (
                     <div
@@ -908,7 +1148,9 @@ function App() {
                       key={service}
                     >
                       <div className="dependency-service-icon">
-                        {getServiceInitial(service)}
+                        {getServiceInitial(
+                          service
+                        )}
                       </div>
 
                       <div>
@@ -930,8 +1172,6 @@ function App() {
         </section>
       </div>
 
-      {/* INCIDENT TIMELINE */}
-
       <section className="panel timeline-card">
         <div className="panel-header">
           <div>
@@ -944,7 +1184,8 @@ function App() {
             </h2>
 
             <p className="panel-description">
-              Temporal ordering of detected failures
+              Temporal ordering of detected
+              failures
             </p>
           </div>
 
@@ -956,33 +1197,36 @@ function App() {
         <div className="timeline">
           {temporalAnalysis.length === 0 ? (
             <div className="empty-inline">
-              No temporal failure signals available.
+              No temporal failure signals
+              available.
             </div>
           ) : (
-            temporalAnalysis.map((item, index) => (
-              <div
-                className="timeline-item"
-                key={index}
-              >
-                <div className="timeline-marker" />
+            temporalAnalysis.map(
+              (item, index) => (
+                <div
+                  className="timeline-item"
+                  key={index}
+                >
+                  <div className="timeline-marker" />
 
-                <div className="timeline-content">
-                  <span className="timeline-time">
-                    {formatTimestamp(
-                      item.first_failure
-                    )}
-                  </span>
+                  <div className="timeline-content">
+                    <span className="timeline-time">
+                      {formatTimestamp(
+                        item.first_failure
+                      )}
+                    </span>
 
-                  <strong>
-                    {item.service}
-                  </strong>
+                    <strong>
+                      {item.service}
+                    </strong>
 
-                  <p>
-                    First detected failure
-                  </p>
+                    <p>
+                      First detected failure
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))
+              )
+            )
           )}
 
           {rootCause.root_cause && (
@@ -1009,8 +1253,6 @@ function App() {
           )}
         </div>
       </section>
-
-      {/* RECOMMENDATION */}
 
       {rootCause.recommendations?.length > 0 && (
         <section className="recommendation recommendation-large">
@@ -1059,11 +1301,13 @@ function App() {
             SERVICES
           </span>
 
-          <h1>Service Health</h1>
+          <h1>
+            Service Health
+          </h1>
 
           <p>
-            Monitor service health, failures and
-            RCA signals
+            Monitor service health, failures,
+            dependencies and RCA signals
           </p>
         </div>
 
@@ -1078,147 +1322,223 @@ function App() {
       <section className="service-overview-strip">
         <div>
           <span>MONITORED</span>
-          <strong>{services.length}</strong>
+
+          <strong>
+            {serviceSummary.total ||
+              backendServices.length}
+          </strong>
         </div>
 
         <div>
-          <span>FAILING</span>
+          <span>CRITICAL</span>
+
           <strong className="text-danger">
-            {failingServices.length}
+            {serviceSummary.critical}
+          </strong>
+        </div>
+
+        <div>
+          <span>DEGRADED</span>
+
+          <strong>
+            {serviceSummary.degraded}
           </strong>
         </div>
 
         <div>
           <span>HEALTHY</span>
-          <strong className="text-success">
-            {Math.max(
-              services.length -
-                failingServices.length,
-              0
-            )}
-          </strong>
-        </div>
 
-        <div>
-          <span>ROOT CAUSE</span>
-          <strong>
-            {rootCause.root_cause || "Unknown"}
+          <strong className="text-success">
+            {serviceSummary.healthy}
           </strong>
         </div>
       </section>
 
       <section className="service-detail-grid">
-        {services.map((service) => {
-          const data =
-            typeof patterns[service] === "object"
-              ? patterns[service]
-              : {};
+        {servicesLoading &&
+        backendServices.length === 0 ? (
+          <section className="panel">
+            <div className="logs-empty">
+              <div className="mini-spinner" />
 
-          const candidate =
-            candidates.find(
-              (item) =>
-                item.service === service
-            );
-
-          const isRoot =
-            service === rootCause.root_cause;
-
-          const failures =
-            data.total_failures || 0;
-
-          return (
-            <div
-              className={`service-detail-card ${
-                isRoot
-                  ? "highlight-root"
-                  : ""
-              }`}
-              key={service}
-            >
-              <div className="service-detail-header">
-                <div className="service-icon large">
-                  {getServiceInitial(service)}
-                </div>
-
-                <div>
-                  <h2>{service}</h2>
-
-                  <span>
-                    {isRoot
-                      ? "Most likely root cause"
-                      : failures > 0
-                      ? "Failure detected"
-                      : "Operating normally"}
-                  </span>
-                </div>
-
-                <div
-                  className={`service-health-dot ${
-                    failures > 0
-                      ? "health-danger"
-                      : "health-good"
-                  }`}
-                />
-              </div>
-
-              <div className="service-detail-divider" />
-
-              <div className="service-metrics">
-                <div>
-                  <span>Failures</span>
-
-                  <strong>
-                    {data.total_failures || 0}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Errors</span>
-
-                  <strong>
-                    {data.error_count || 0}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Critical</span>
-
-                  <strong>
-                    {data.critical_count || 0}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>RCA Score</span>
-
-                  <strong>
-                    {candidate?.score || 0}
-                  </strong>
-                </div>
-              </div>
-
-              <div className="service-card-bottom">
-                <span
-                  className={
-                    failures > 0
-                      ? "status-danger"
-                      : "status-success"
-                  }
-                >
-                  {failures > 0
-                    ? "ATTENTION REQUIRED"
-                    : "HEALTHY"}
-                </span>
-
-                {isRoot && (
-                  <span className="root-label">
-                    PRIMARY SUSPECT
-                  </span>
-                )}
-              </div>
+              <p>
+                Loading service health...
+              </p>
             </div>
-          );
-        })}
+          </section>
+        ) : backendServices.length === 0 ? (
+          <section className="panel">
+            <div className="logs-empty">
+              <div className="empty-icon">
+                ◈
+              </div>
+
+              <h3>
+                No service data
+              </h3>
+
+              <p>
+                RootCauseAI has not received
+                service telemetry yet.
+              </p>
+            </div>
+          </section>
+        ) : (
+          backendServices.map((service) => {
+            const isRoot =
+              service.service ===
+              rootCause.root_cause;
+
+            return (
+              <div
+                className={`service-detail-card ${
+                  isRoot
+                    ? "highlight-root"
+                    : ""
+                }`}
+                key={service.service}
+              >
+                <div className="service-detail-header">
+                  <div className="service-icon large">
+                    {getServiceInitial(
+                      service.service
+                    )}
+                  </div>
+
+                  <div>
+                    <h2>
+                      {service.service}
+                    </h2>
+
+                    <span>
+                      {isRoot
+                        ? "Most likely root cause"
+                        : service.health ===
+                          "CRITICAL"
+                        ? "Critical service health"
+                        : service.health ===
+                          "DEGRADED"
+                        ? "Degraded service health"
+                        : "Operating normally"}
+                    </span>
+                  </div>
+
+                  <div
+                    className={`service-health-dot ${getServiceHealthClass(
+                      service.health
+                    )}`}
+                  />
+                </div>
+
+                <div className="service-detail-divider" />
+
+                <div className="service-metrics">
+                  <div>
+                    <span>
+                      Failures
+                    </span>
+
+                    <strong>
+                      {service.total_failures}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Errors
+                    </span>
+
+                    <strong>
+                      {service.error_count}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Critical
+                    </span>
+
+                    <strong>
+                      {service.critical_count}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      RCA Score
+                    </span>
+
+                    <strong>
+                      {candidates.find(
+                        (item) =>
+                          item.service ===
+                          service.service
+                      )?.score || 0}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="service-card-bottom">
+                  <span
+                    className={getServiceStatusClass(
+                      service.health
+                    )}
+                  >
+                    {service.health}
+                  </span>
+
+                  {isRoot && (
+                    <span className="root-label">
+                      PRIMARY SUSPECT
+                    </span>
+                  )}
+                </div>
+
+                <div className="service-dependency-info">
+                  <div>
+                    <span>
+                      DEPENDS ON
+                    </span>
+
+                    <strong>
+                      {service.depends_on?.length
+                        ? service.depends_on.join(
+                            ", "
+                          )
+                        : "None"}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      DEPENDENTS
+                    </span>
+
+                    <strong>
+                      {service.dependents?.length
+                        ? service.dependents.join(
+                            ", "
+                          )
+                        : "None"}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="service-last-failure">
+                  <span>
+                    LAST FAILURE
+                  </span>
+
+                  <strong>
+                    {formatTimestamp(
+                      service.last_failure
+                    )}
+                  </strong>
+                </div>
+              </div>
+            );
+          })
+        )}
       </section>
     </>
   );
@@ -1235,7 +1555,9 @@ function App() {
             INCIDENT MANAGEMENT
           </span>
 
-          <h1>Incident Overview</h1>
+          <h1>
+            Incident Overview
+          </h1>
 
           <p>
             Investigate failures detected by
@@ -1258,7 +1580,9 @@ function App() {
 
       <section className="incident-summary-grid">
         <div className="incident-summary-card">
-          <span>ACTIVE INCIDENTS</span>
+          <span>
+            ACTIVE INCIDENTS
+          </span>
 
           <strong>
             {activeIncidents.length}
@@ -1464,7 +1788,8 @@ function App() {
   // =========================================================
 
   const renderIncidentDetails = () => {
-    const incident = selectedIncident;
+    const incident =
+      selectedIncident;
 
     if (!incident) {
       return (
@@ -1483,18 +1808,22 @@ function App() {
     const incidentServices =
       incident.affected_services || [];
 
-    // Prefer live incident RCA evidence.
     const incidentEvidence =
-      incidentAnalysis?.root_cause_explanation?.evidence
-        ?.length
-        ? incidentAnalysis.root_cause_explanation.evidence
+      incidentAnalysis
+        ?.root_cause_explanation
+        ?.evidence?.length
+        ? incidentAnalysis
+            .root_cause_explanation
+            .evidence
         : incident.evidence || [];
 
-    // Prefer live incident RCA recommendations.
     const incidentRecommendations =
-      incidentAnalysis?.root_cause_explanation?.recommendations
-        ?.length
-        ? incidentAnalysis.root_cause_explanation.recommendations
+      incidentAnalysis
+        ?.root_cause_explanation
+        ?.recommendations?.length
+        ? incidentAnalysis
+            .root_cause_explanation
+            .recommendations
         : incident.recommendations || [];
 
     const incidentCandidates =
@@ -1504,7 +1833,8 @@ function App() {
       incidentAnalysis?.correlations || {};
 
     const incidentRootCause =
-      incidentAnalysis?.root_cause_explanation || {};
+      incidentAnalysis
+        ?.root_cause_explanation || {};
 
     const incidentAnalysisEvidence =
       incidentAnalysis?.evidence || [];
@@ -1532,41 +1862,51 @@ function App() {
     const incidentServiceSet =
       new Set(incidentServices);
 
-    // IMPORTANT:
-    // For active incidents the backend determines
-    // analysis_end_time from the latest telemetry.
     const incidentStart =
-      incidentAnalysis?.incident?.started_at ||
+      incidentAnalysis
+        ?.incident?.started_at ||
       incident.started_at;
 
     const incidentEnd =
-      incidentAnalysis?.incident?.analysis_end_time ||
+      incidentAnalysis
+        ?.incident?.analysis_end_time ||
       incident.ended_at;
 
-    const incidentStartTime = incidentStart
-      ? new Date(incidentStart).getTime()
-      : null;
+    const incidentStartTime =
+      incidentStart
+        ? new Date(
+            incidentStart
+          ).getTime()
+        : null;
 
-    const incidentEndTime = incidentEnd
-      ? new Date(incidentEnd).getTime()
-      : Infinity;
+    const incidentEndTime =
+      incidentEnd
+        ? new Date(
+            incidentEnd
+          ).getTime()
+        : Infinity;
 
-    const incidentLogs = logs.filter((log) => {
-      const logTime =
-        new Date(log.timestamp).getTime();
+    const incidentLogs =
+      logs.filter((log) => {
+        const logTime =
+          new Date(
+            log.timestamp
+          ).getTime();
 
-      return (
-        incidentServiceSet.has(log.service) &&
-        incidentStartTime !== null &&
-        logTime >= incidentStartTime &&
-        logTime <= incidentEndTime
-      );
-    });
+        return (
+          incidentServiceSet.has(
+            log.service
+          ) &&
+          incidentStartTime !== null &&
+          logTime >=
+            incidentStartTime &&
+          logTime <=
+            incidentEndTime
+        );
+      });
 
     return (
       <>
-        {/* INCIDENT TOPBAR */}
-
         <div className="topbar incident-detail-topbar">
           <div>
             <button
@@ -1592,8 +1932,9 @@ function App() {
                 </h1>
 
                 <p>
-                  RootCauseAI incident investigation
-                  and evidence analysis
+                  RootCauseAI incident
+                  investigation and
+                  evidence analysis
                 </p>
               </div>
 
@@ -1607,8 +1948,6 @@ function App() {
             </div>
           </div>
         </div>
-
-        {/* INCIDENT HERO */}
 
         <section className="incident-hero">
           <div className="incident-hero-main">
@@ -1635,7 +1974,9 @@ function App() {
           </div>
 
           <div className="incident-hero-score">
-            <span>RCA SCORE</span>
+            <span>
+              RCA SCORE
+            </span>
 
             <strong>
               {incidentRcaScore}
@@ -1647,8 +1988,6 @@ function App() {
             </small>
           </div>
         </section>
-
-        {/* INCIDENT METADATA */}
 
         <section className="incident-identity">
           <div>
@@ -1697,8 +2036,6 @@ function App() {
           </div>
         </section>
 
-        {/* MAIN RCA */}
-
         <div className="incident-detail-grid">
           <section className="panel incident-root-panel">
             <div className="panel-header">
@@ -1733,7 +2070,9 @@ function App() {
 
             <div className="incident-evidence">
               <div className="section-mini-header">
-                <h3>Evidence</h3>
+                <h3>
+                  Evidence
+                </h3>
 
                 <span>
                   {incidentEvidence.length}
@@ -1765,8 +2104,6 @@ function App() {
             </div>
           </section>
 
-          {/* IMPACT */}
-
           <section className="panel">
             <div className="panel-header">
               <div>
@@ -1783,14 +2120,15 @@ function App() {
             <div className="impact-list">
               {incidentServices.length === 0 ? (
                 <div className="empty-inline">
-                  No affected services recorded.
+                  No affected services
+                  recorded.
                 </div>
               ) : (
                 incidentServices.map(
                   (service) => {
-                    // Prefer incident-specific pattern data.
                     const serviceData =
-                      incidentAnalysis?.patterns?.[
+                      incidentAnalysis
+                        ?.patterns?.[
                         service
                       ] ||
                       patterns[service];
@@ -1820,13 +2158,15 @@ function App() {
 
                         <span
                           className={
-                            service === liveRootCause
+                            service ===
+                            liveRootCause
                               ? "root-label"
                               : ""
                           }
                         >
                           {serviceData
-                            ?.total_failures || 0}{" "}
+                            ?.total_failures ||
+                            0}{" "}
                           failures
                         </span>
                       </div>
@@ -1837,8 +2177,6 @@ function App() {
             </div>
           </section>
         </div>
-
-        {/* INCIDENT EVENT TIMELINE */}
 
         <section className="panel incident-events-panel">
           <div className="panel-header">
@@ -1852,8 +2190,8 @@ function App() {
               </h2>
 
               <p className="panel-description">
-                Persisted lifecycle events recorded by
-                RootCauseAI
+                Persisted lifecycle events
+                recorded by RootCauseAI
               </p>
             </div>
 
@@ -1881,8 +2219,8 @@ function App() {
               </h3>
 
               <p>
-                No persisted events were recorded
-                for this incident.
+                No persisted events were
+                recorded for this incident.
               </p>
             </div>
           ) : (
@@ -1904,7 +2242,8 @@ function App() {
                     </div>
 
                     {index <
-                      incidentEvents.length - 1 && (
+                      incidentEvents.length -
+                        1 && (
                       <div className="incident-event-line" />
                     )}
 
@@ -1948,8 +2287,6 @@ function App() {
           )}
         </section>
 
-        {/* INCIDENT-SPECIFIC RCA CANDIDATES */}
-
         <section className="panel">
           <div className="panel-header">
             <div>
@@ -1962,8 +2299,9 @@ function App() {
               </h2>
 
               <p className="panel-description">
-                Candidate ranking generated specifically
-                from this incident's telemetry
+                Candidate ranking generated
+                specifically from this
+                incident's telemetry
               </p>
             </div>
 
@@ -1977,21 +2315,24 @@ function App() {
               <div className="mini-spinner" />
 
               <p>
-                Running incident-specific RCA...
+                Running incident-specific
+                RCA...
               </p>
             </div>
-          ) : incidentCandidates.length === 0 ? (
+          ) : incidentCandidates.length ===
+            0 ? (
             <div className="logs-empty">
               <p>
-                No RCA candidates available for this
-                incident.
+                No RCA candidates available
+                for this incident.
               </p>
             </div>
           ) : (
             <div className="candidate-list">
               {incidentCandidates.map(
                 (candidate, index) => {
-                  const isTop = index === 0;
+                  const isTop =
+                    index === 0;
 
                   return (
                     <div
@@ -2034,7 +2375,8 @@ function App() {
                             width: `${Math.min(
                               Math.max(
                                 Number(
-                                  candidate.score || 0
+                                  candidate.score ||
+                                    0
                                 ) * 10,
                                 4
                               ),
@@ -2081,8 +2423,6 @@ function App() {
           )}
         </section>
 
-        {/* INCIDENT AI DIAGNOSIS */}
-
         <section className="panel incident-ai-diagnosis">
           <div className="panel-header">
             <div>
@@ -2095,8 +2435,8 @@ function App() {
               </h2>
 
               <p className="panel-description">
-                Evidence and reasoning generated from
-                incident-specific telemetry
+                Evidence and reasoning generated
+                from incident-specific telemetry
               </p>
             </div>
 
@@ -2135,7 +2475,8 @@ function App() {
             </div>
           </div>
 
-          {incidentAnalysisEvidence.length > 0 && (
+          {incidentAnalysisEvidence.length >
+            0 && (
             <div className="incident-evidence">
               <div className="section-mini-header">
                 <h3>
@@ -2159,10 +2500,9 @@ function App() {
 
                     <span>
                       {item.service}
-
                       {" — "}
-
-                      {item.total_failures} failure(s)
+                      {item.total_failures}{" "}
+                      failure(s)
 
                       {item.first_failure && (
                         <>
@@ -2185,8 +2525,6 @@ function App() {
             </div>
           )}
         </section>
-
-        {/* CORRELATED SIGNALS */}
 
         <section className="panel">
           <div className="panel-header">
@@ -2246,8 +2584,6 @@ function App() {
           </div>
         </section>
 
-        {/* INCIDENT LOGS */}
-
         <section className="panel">
           <div className="panel-header">
             <div>
@@ -2260,7 +2596,8 @@ function App() {
               </h2>
 
               <p className="panel-description">
-                Raw telemetry from affected services
+                Raw telemetry from affected
+                services
               </p>
             </div>
 
@@ -2312,9 +2649,8 @@ function App() {
           )}
         </section>
 
-        {/* RECOMMENDATION */}
-
-        {incidentRecommendations.length > 0 && (
+        {incidentRecommendations.length >
+          0 && (
           <section className="recommendation recommendation-large">
             <div className="recommendation-icon">
               !
@@ -2352,11 +2688,13 @@ function App() {
             TELEMETRY
           </span>
 
-          <h1>System Logs</h1>
+          <h1>
+            System Logs
+          </h1>
 
           <p>
-            Search and inspect raw telemetry collected
-            by RootCauseAI
+            Search and inspect raw telemetry
+            collected by RootCauseAI
           </p>
         </div>
 
@@ -2375,12 +2713,19 @@ function App() {
 
       <section className="log-overview-strip">
         <div>
-          <span>TOTAL LOGS</span>
-          <strong>{logs.length}</strong>
+          <span>
+            TOTAL LOGS
+          </span>
+
+          <strong>
+            {logs.length}
+          </strong>
         </div>
 
         <div>
-          <span>VISIBLE</span>
+          <span>
+            VISIBLE
+          </span>
 
           <strong>
             {filteredLogs.length}
@@ -2388,7 +2733,9 @@ function App() {
         </div>
 
         <div>
-          <span>ERRORS</span>
+          <span>
+            ERRORS
+          </span>
 
           <strong className="text-danger">
             {
@@ -2396,14 +2743,17 @@ function App() {
                 (log) =>
                   String(
                     log.level
-                  ).toLowerCase() === "error"
+                  ).toLowerCase() ===
+                  "error"
               ).length
             }
           </strong>
         </div>
 
         <div>
-          <span>SERVICES</span>
+          <span>
+            SERVICES
+          </span>
 
           <strong>
             {uniqueServices.length}
@@ -2497,8 +2847,12 @@ function App() {
               className="clear-filters"
               onClick={() => {
                 setLogSearch("");
-                setServiceFilter("All");
-                setLevelFilter("All");
+                setServiceFilter(
+                  "All"
+                );
+                setLevelFilter(
+                  "All"
+                );
               }}
             >
               Clear filters
@@ -2514,7 +2868,8 @@ function App() {
               Loading telemetry...
             </p>
           </div>
-        ) : filteredLogs.length === 0 ? (
+        ) : filteredLogs.length ===
+          0 ? (
           <div className="logs-empty">
             <div className="empty-icon">
               ⌁
@@ -2598,8 +2953,8 @@ function App() {
           </h1>
 
           <p>
-            Evidence-based failure candidate ranking
-            and system reasoning
+            Evidence-based failure candidate
+            ranking and system reasoning
           </p>
         </div>
 
@@ -2615,8 +2970,6 @@ function App() {
             : "Run Analysis"}
         </button>
       </div>
-
-      {/* RCA HERO */}
 
       <section className="analysis-hero">
         <div className="analysis-hero-content">
@@ -2666,8 +3019,6 @@ function App() {
         </div>
       </section>
 
-      {/* EVIDENCE */}
-
       <section className="panel">
         <div className="panel-header">
           <div>
@@ -2676,7 +3027,8 @@ function App() {
             </span>
 
             <h2>
-              Why RootCauseAI suspects this service
+              Why RootCauseAI suspects this
+              service
             </h2>
           </div>
         </div>
@@ -2707,8 +3059,6 @@ function App() {
         </div>
       </section>
 
-      {/* CANDIDATE RANKING */}
-
       <section className="panel">
         <div className="panel-header">
           <div>
@@ -2722,8 +3072,8 @@ function App() {
 
             <p className="panel-description">
               Services ranked using failure,
-              temporal, correlation and dependency
-              signals
+              temporal, correlation and
+              dependency signals
             </p>
           </div>
 
@@ -2736,13 +3086,15 @@ function App() {
           {candidates.length === 0 ? (
             <div className="logs-empty">
               <p>
-                No root-cause candidates available.
+                No root-cause candidates
+                available.
               </p>
             </div>
           ) : (
             candidates.map(
               (candidate, index) => {
-                const isTop = index === 0;
+                const isTop =
+                  index === 0;
 
                 return (
                   <div
@@ -2785,7 +3137,8 @@ function App() {
                           width: `${Math.min(
                             Math.max(
                               Number(
-                                candidate.score || 0
+                                candidate.score ||
+                                  0
                               ) * 10,
                               4
                             ),
@@ -2832,9 +3185,8 @@ function App() {
         </div>
       </section>
 
-      {/* RECOMMENDATIONS */}
-
-      {rootCause.recommendations?.length > 0 && (
+      {rootCause.recommendations?.length >
+        0 && (
         <section className="recommendation recommendation-large">
           <div className="recommendation-icon">
             !
@@ -2899,7 +3251,9 @@ function App() {
           R
         </div>
 
-        <h2>RootCauseAI</h2>
+        <h2>
+          RootCauseAI
+        </h2>
 
         <p>
           Initializing system intelligence...
@@ -2931,7 +3285,9 @@ function App() {
           Backend unavailable
         </h2>
 
-        <p>{error}</p>
+        <p>
+          {error}
+        </p>
 
         <button
           className="refresh-button"
@@ -2972,8 +3328,6 @@ function App() {
 
   return (
     <div className="app-shell">
-      {/* SIDEBAR */}
-
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-logo">
@@ -3001,7 +3355,8 @@ function App() {
               <a
                 key={item.name}
                 className={
-                  activePage === item.name
+                  activePage ===
+                  item.name
                     ? "active"
                     : ""
                 }
@@ -3019,10 +3374,14 @@ function App() {
                   {item.name}
                 </span>
 
-                {item.name === "Incidents" &&
-                  activeIncidents.length > 0 && (
+                {item.name ===
+                  "Incidents" &&
+                  activeIncidents.length >
+                    0 && (
                     <span className="nav-count">
-                      {activeIncidents.length}
+                      {
+                        activeIncidents.length
+                      }
                     </span>
                   )}
               </a>
@@ -3064,8 +3423,6 @@ function App() {
           </span>
         </div>
       </aside>
-
-      {/* MAIN CONTENT */}
 
       <main className="main-content">
         <div className="content-wrapper">

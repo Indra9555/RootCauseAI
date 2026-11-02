@@ -1,45 +1,76 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
+/*
+  Design tokens. Every colour, size and spacing value used by the UI is
+  defined here. Light values are bone/paper, dark values are matte charcoal.
+  There is a single accent colour; it marks live state and status only.
+*/
 :root {
-  --paper: #EDE8DC;
-  --paper-2: #E3DDCE;
-  --ink: #17160F;
-  --ink-muted: #6B675A;
-  --accent: #D9480F;
+  color-scheme: light dark;
 
+  /* Surfaces */
+  --bg: light-dark(#f1eee6, #121211);
+  --surface: light-dark(#faf8f3, #191917);
+  --surface-sunken: light-dark(#ebe7dc, #212120);
+
+  /* Rules */
+  --border: light-dark(#d5d0c3, #31312e);
+  --border-strong: light-dark(#a8a294, #54544e);
+
+  /* Text */
+  --ink: light-dark(#1b1b19, #ecebe4);
+  --ink-muted: light-dark(#52503f, #b0aea3);
+  --ink-quiet: light-dark(#6b675c, #8f8d84);
+
+  /* The one accent: live state, status dots, focus of the primary action */
+  --accent: light-dark(#b45309, #f5a524);
+
+  /* Type */
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino,
+    Georgia, serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas,
+    "Liberation Mono", Menlo, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.875rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+
+  --leading-tight: 1.2;
+  --leading-body: 1.5;
+  --tracking-label: 0.06em;
+  --tracking-display: -0.02em;
+
+  /* Spacing (4px base) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  /* Geometry: flat, hairline */
   --radius: 2px;
-  --rule: 1px solid var(--ink);
+  --hairline: 1px;
+  --sidebar-width: 13.5rem;
+  --content-max: 90rem;
+  --row-height: 2.25rem;
+  --control-height: 2rem;
 
-  --font-display: 'Fraunces', Georgia, serif;
-  --font-body: 'Instrument Sans', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  /* Motion */
+  --duration: 150ms;
+  --ease: ease-in-out;
 
-  --text-body: 16px;
-  --text-label: 12px;
-  --text-display: 32px;
+  /* Graph geometry is read by CSS only; layout numbers live in the component. */
+  --dot-size: 0.5rem;
 }
 
-* {
-  box-sizing: border-box;
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
-html,
-body {
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--font-body);
-  font-size: var(--text-body);
-  line-height: 1.6;
-}
-
-button,
-input,
-textarea,
-select {
-  font: inherit;
-}
-
-:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 2px;
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }

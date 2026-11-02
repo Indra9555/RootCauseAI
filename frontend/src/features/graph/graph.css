@@ -1,0 +1,75 @@
+.graph {
+  overflow-x: auto;
+  padding: var(--space-3);
+}
+
+.graph__svg {
+  display: block;
+  max-width: none;
+}
+
+.graph__edge {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.graph__arrow {
+  fill: var(--border-strong);
+}
+
+.graph__node {
+  cursor: pointer;
+  outline: none;
+}
+
+.graph__box {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+  stroke-width: 1;
+  transition: fill var(--duration) var(--ease),
+    stroke var(--duration) var(--ease);
+}
+
+.graph__node:hover .graph__box {
+  fill: var(--surface-sunken);
+  stroke: var(--ink);
+}
+
+.graph__node:focus-visible .graph__box {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.graph__node[data-root="true"] .graph__box {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.graph__dot {
+  fill: transparent;
+  stroke: var(--ink-quiet);
+  stroke-width: 1;
+}
+
+.graph__node[data-tone="alert"] .graph__dot {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+
+.graph__node[data-tone="warn"] .graph__dot {
+  stroke: var(--accent);
+}
+
+.graph__name {
+  fill: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.graph__meta {
+  fill: var(--ink-quiet);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+}

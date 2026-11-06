@@ -1304,6 +1304,4 @@ By combining multiple sources of evidence, RootCauseAI identifies probable root 
 
 React · Vite · JavaScript · Axios · CSS · Python · FastAPI · Uvicorn · SQLAlchemy · Pydantic · PostgreSQL · Docker · Docker Compose · WSL 2 · Git · GitHub
 
-### Status
 
-**🟢 Active Development** — RootCauseAI is continuously being extended with additional failure-analysis, observability, visualization, intelligence, and reliability capabilities.
